@@ -162,16 +162,18 @@ heart/pima the differences are *not* significant and we do not claim them.
 ## Corrected-protocol evaluation (leak-free nested CV)
 
 The exploratory numbers above use seed-resampled single splits. We also run a
-stricter protocol that removes two methodological flaws: **data leakage**
+stricter protocol that removes three methodological flaws: **data leakage**
 (imputation, scaling and feature selection are fitted on training rows only, via
-`src/pipeline.py`; the raw loaders leave missing values in place) and **seed
+`src/pipeline.py`; the raw loaders leave missing values in place), **seed
 pseudo-replication** (5-fold nested CV where every row is predicted exactly once
-out-of-fold, with row-level paired statistics).
+out-of-fold, with row-level paired statistics), and **inner-fold leakage**
+(preprocessing and rule discovery are refit inside every inner training fold, so
+the hyperparameter and threshold search never sees the rows it is scored on).
 
 ```bash
 cd ns_expert
 PYTHONPATH=. python experiments/nested_cv.py --datasets heart pima wbc ttt monk1 monk3 \
-    --seeds 0 --folds 5 --epochs 150 --patience 20 --out results/nested_cv
+    --seeds 0 1 2 3 4 --folds 5 --epochs 150 --patience 20 --out results/nested_cv
 PYTHONPATH=. python experiments/nested_stats.py --datasets heart pima wbc ttt monk1 monk3 \
     --out results/nested_cv
 PYTHONPATH=. python experiments/nested_structural.py --datasets ttt monk1 monk3 \
@@ -183,20 +185,25 @@ PYTHONPATH=. python experiments/nested_ablation.py --datasets wbc ttt monk1 monk
 PYTHONPATH=. python experiments/make_stats_figures.py   # corrected tables
 ```
 
+The multi-seed run additionally writes `results/nested_cv/nested_cv_seed_summary.csv`
+(per-method mean/std of accuracy over the five independent outer partitions), used
+for the stability table `figures/table_nested_seed.tex`.
+
 Honest outcome of the corrected protocol (see paper Section "Corrected-Protocol
 Results"):
 
 * NEXS is **not** uniformly more accurate than strong baselines. On heart and pima
   it does not beat a plain MLP or a random forest, and the row-level paired tests
-  are **not** significant (Holm-corrected). Only three of the thirty prespecified
-  comparisons reach significance, all on datasets with exact rules.
+  are **not** significant (Holm-corrected). Seven of the thirty prespecified
+  comparisons reach significance, all on datasets with exact rules or corrupted
+  knowledge.
 * The **low-data advantage survives**: on tic-tac-toe at 10% of the training rows
   NEXS reaches 0.924 accuracy vs. 0.757 for the MLP, and the gap closes by 100%.
 * **Rule recovery is non-circular and partial**: exact MONK-1 recovery and a
   logically equivalent tic-tac-toe rule set (semantic F1 = 1.000), but only
-  semantic F1 = 0.395 on the 5%-noisy MONK-3.
+  semantic F1 = 0.393 on the 5%-noisy MONK-3 (0.998 full-domain equivalence).
 * NEXS **over-fires rule conjunctions less** than the neural-only model on near-miss
-  rows (monk1 0.353 vs. 0.449; monk3 0.482 vs. 0.583), though not on ttt/wbc.
+  rows (monk1 0.371 vs. 0.448; monk3 0.484 vs. 0.582), though not on ttt/wbc.
 
 ### Wisconsin breast cancer (external KBANN benchmark)
 

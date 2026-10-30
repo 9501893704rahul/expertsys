@@ -141,9 +141,26 @@ Single source of truth: `src.real_data.monk_full_domain` / `monk_truth_dnf` /
 `_check_codebook` cross-checks the enumerated grid against the observed rows
 (tol 0 for MONK-1, 5% for MONK-3's documented label noise).
 
-Corrected nested results (5 folds, seed 0, `results/nested_cv`): NEXS-Expert is
-1.000 on ttt/MONK-1 and 0.989 on MONK-3; the significant paired wins are all on
-exact-rule or corrupted-KB comparisons (ttt, MONK-1, MONK-3, pima-vs-GB); the
-clinical MLP comparisons remain non-significant. Structural: MONK-3 full-domain
-equivalence rose 0.665 -> 0.998 (the extra rules are harmless refinements, set
-F1 still 0.393). Tests: 98 pass.
+Corrected nested results (5 folds, seeds 0--4, `results/nested_cv`): NEXS-Expert is
+1.000 on ttt/MONK-1 and 0.987 on MONK-3 (MLP 0.988/1.000/0.974); the significant
+paired wins are all on exact-rule or corrupted-KB comparisons (ttt, MONK-1,
+MONK-3, pima-vs-GB); the clinical MLP comparisons remain non-significant.
+Structural: MONK-3 full-domain equivalence 0.998 (the extra rules are harmless
+refinements, set F1 still 0.393). Tests: 105 pass.
+
+6. **Inner-fold refit (NEXS v5).** The nested protocol previously reused the
+   outer-fold-fitted preprocessor *and* the outer-fold-discovered rules inside the
+   inner CV that selects hyperparameters and the threshold --- a leak of the
+   outer training statistics into model selection. Fixed: `src/real_data.py`
+   gained `fit_preprocessor(name, Xraw, rows, y) -> (prep, domain)` (fit
+   imputation/scaling on `rows` only, map expert thresholds through those
+   bounds), and `experiments/nested_cv.py` now refits *both* preprocessing and
+   rule discovery inside every inner training split via the `_variant()` helper.
+   `make_oof_folds` also yields `Xraw`/`y` so callers can refit on a smaller
+   partition. Regression tests `test_inner_fold_preprocessing_is_independent`
+   and `test_inner_fold_discovery_is_independent` assert the inner prep median and
+   bounds equal the inner-training statistics and exclude inner-validation rows.
+   `make_stats_figures.table_nested_seed_summary` adds a seed-stability table.
+   Multi-seed runs (`--seeds 0 1 2 3 4`) write
+   `results/nested_cv/nested_cv_seed_summary.csv`; inference still uses the
+   primary seed only (`nested_stats.py` filters to the first seed).

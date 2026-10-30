@@ -447,6 +447,24 @@ def build_domain(name: str, lo: pd.Series, hi: pd.Series,
     )
 
 
+def fit_preprocessor(name: str, Xraw: pd.DataFrame, rows,
+                     y: np.ndarray):
+    """Fit the dataset's preprocessing on ``rows`` only.
+
+    Returns ``(prep, domain)`` where ``domain`` carries the expert thresholds
+    mapped through *these* bounds.  Used by every level of the nested protocol
+    so that an inner fold never borrows the outer fold's (or its own
+    validation rows') statistics.
+    """
+    from .pipeline import Preprocessor
+
+    prep = Preprocessor(scale=DATASETS[name].get("preprocess", "minmax")).fit(
+        Xraw.iloc[rows], np.asarray(y)[rows])
+    lo, hi = prep.raw_bounds()
+    domain = build_domain(name, lo, hi, features=prep.kept_)
+    return prep, domain
+
+
 def load_real(name: str, seed: int = 0, fractions=(0.6, 0.2, 0.2)):
     """Return (domain, train, val, test) with normalised frames and label arrays.
 
@@ -455,7 +473,6 @@ def load_real(name: str, seed: int = 0, fractions=(0.6, 0.2, 0.2)):
     so expert thresholds live in the units the models actually see.
     """
     from .data import Dataset
-    from .pipeline import Preprocessor
 
     Xraw, y = DATASETS[name]["loader"]()
     rng = np.random.default_rng(seed)
@@ -464,10 +481,7 @@ def load_real(name: str, seed: int = 0, fractions=(0.6, 0.2, 0.2)):
     b = int((fractions[0] + fractions[1]) * len(idx))
     tr_i, va_i, te_i = idx[:a], idx[a:b], idx[b:]
 
-    prep = Preprocessor(scale=DATASETS[name].get("preprocess", "minmax")).fit(
-        Xraw.iloc[tr_i], y[tr_i])
-    lo, hi = prep.raw_bounds()
-    domain = build_domain(name, lo, hi, features=prep.kept_)
+    prep, domain = fit_preprocessor(name, Xraw, tr_i, y)
 
     def mk(ix):
         Xn = prep.transform(Xraw.iloc[ix])
@@ -484,11 +498,13 @@ def make_oof_folds(name: str, n_folds: int = 5, seed: int = 0,
     (out-of-fold), so no observation is reused across folds and seed-level
     pseudo-replication is impossible.  The validation block used for tuning is
     carved out of the *training* rows only.
+
+    The raw frame is also yielded so callers can refit preprocessing on a
+    smaller partition (the inner folds) without seeing held-out rows.
     """
     from sklearn.model_selection import StratifiedKFold
 
     from .data import Dataset
-    from .pipeline import Preprocessor
 
     Xraw, y = DATASETS[name]["loader"]()
     splitter = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=seed)
@@ -498,15 +514,12 @@ def make_oof_folds(name: str, n_folds: int = 5, seed: int = 0,
         tr_i, va_i = next(inner.split(Xraw.iloc[tr_all], y[tr_all]))
         tr_i, va_i = tr_all[tr_i], tr_all[va_i]
 
-        prep = Preprocessor(scale=DATASETS[name].get("preprocess", "minmax")).fit(
-            Xraw.iloc[tr_i], y[tr_i])
-        lo, hi = prep.raw_bounds()
-        domain = build_domain(name, lo, hi, features=prep.kept_)
+        prep, domain = fit_preprocessor(name, Xraw, tr_i, y)
 
         def mk(ix):
             return Dataset(prep.transform(Xraw.iloc[ix]), y[ix],
                            pd.DataFrame(index=range(len(ix))), domain)
 
-        yield dict(fold=fold, prep=prep, domain=domain,
+        yield dict(fold=fold, prep=prep, domain=domain, Xraw=Xraw, y=y,
                    train=mk(tr_i), val=mk(va_i), test=mk(te_i),
                    tr_i=tr_i, va_i=va_i, te_i=te_i)

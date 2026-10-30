@@ -276,6 +276,42 @@ def table_nested_main(metrics: pd.DataFrame) -> None:
     (FIG / "table_nested_main.tex").write_text("\n".join(lines))
 
 
+def table_nested_seed_summary(metrics: pd.DataFrame) -> None:
+    """Accuracy across independent outer-CV repetitions (stability check)."""
+    order = ["LogReg", "DecisionTree", "RandomForest", "GradientBoosting",
+             "MLP", "SemanticLoss", "NEXS_Expert", "NEXS_Discovered",
+             "NEXS_Corrupt"]
+    methods = [m for m in order if m in set(metrics.method)]
+    datasets = sorted(metrics.dataset.unique())
+    g = metrics.groupby(["dataset", "method"])["acc"]
+    lines = [
+        r"\begin{table}[t]\centering",
+        r"\footnotesize",
+        r"\caption{Stability of accuracy across independent outer-CV repetitions "
+        r"(each repetition re-partitions the same rows into $5$ folds). Cells are "
+        r"mean\,$\pm$\,std. These repetitions reuse the same observations, so they "
+        r"are a stability check only; all inference runs on the pooled out-of-fold "
+        r"rows of the primary repetition.}",
+        r"\label{tab:nested-seed}",
+        r"\begin{tabular}{l" + "c" * len(datasets) + "}",
+        r"\toprule",
+        "Method & " + " & ".join(_esc(d) for d in datasets) + r" \\",
+        r"\midrule",
+    ]
+    for m in methods:
+        cells = []
+        for d in datasets:
+            key = (d, m)
+            if key in g.groups:
+                mu, sd = g.get_group(key).mean(), g.get_group(key).std(ddof=0)
+                cells.append(f"{mu:.3f}\\,$\\pm$\\,{sd:.3f}")
+            else:
+                cells.append("--")
+        lines.append(f"{_esc(m)} & " + " & ".join(cells) + r" \\")
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
+    (FIG / "table_nested_seed.tex").write_text("\n".join(lines))
+
+
 def table_nested_stats(stats: pd.DataFrame) -> None:
     """Paired row-level comparisons with bootstrap CIs and Holm correction."""
     lines = [
@@ -454,7 +490,10 @@ def main() -> None:
     nested = ROOT / "results" / "nested_cv"
     met = nested / "nested_cv_metrics.csv"
     if met.exists():
-        table_nested_main(pd.read_csv(met))
+        mdf = pd.read_csv(met)
+        table_nested_main(mdf)
+        if mdf.seed.nunique() > 1:
+            table_nested_seed_summary(mdf)
     stat = nested / "paired_statistics.csv"
     if stat.exists():
         table_nested_stats(pd.read_csv(stat))

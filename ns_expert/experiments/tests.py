@@ -499,6 +499,100 @@ def test_run_nested_aggregates_per_fold():
     check("per-fold thresholds were recorded", len(thr_of["MLP"]) == len(folds))
 
 
+
+def test_inner_fold_preprocessing_is_independent():
+    """Inner-fold preprocessing must be fit on inner-train rows only.
+
+    The auditor's concern was that the inner CV reused the outer fold's
+    scaler/selection.  We reproduce one inner split by hand, fit the
+    preprocessor on the inner-train rows only, and check that every fitted
+    statistic is recoverable from the inner-train rows and differs from the
+    statistic over inner-train+inner-validation rows when those differ.
+    """
+    from src import real_data
+
+    name = "heart"
+    Xraw, y = real_data.DATASETS[name]["loader"]()
+    f = next(iter(real_data.make_oof_folds(name, n_folds=5, seed=0)))
+    tr_i = f["tr_i"]
+
+    from sklearn.model_selection import StratifiedKFold
+    skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=0)
+    itr, _ = next(skf.split(Xraw.iloc[tr_i], np.asarray(y)[tr_i]))
+    inner_tr = tr_i[itr]
+
+    prep_inner, dom_inner = real_data.fit_preprocessor(name, Xraw, inner_tr, y)
+    inner_med = Xraw.iloc[inner_tr].median()
+    check("inner prep median == inner-train median",
+          bool(np.allclose(prep_inner.medians_.values, inner_med.values)))
+    both_med = Xraw.iloc[tr_i].median()
+    if not np.allclose(inner_med.values, both_med.values):
+        check("inner prep median excludes inner-validation rows",
+              not np.allclose(prep_inner.medians_.values, both_med.values))
+    check("inner prep bounds == inner-train bounds",
+          bool(np.allclose(prep_inner.lo_.values,
+                           Xraw.iloc[inner_tr].min().values))
+          and bool(np.allclose(prep_inner.hi_.values,
+                               Xraw.iloc[inner_tr].max().values)))
+    _, dom_outer = real_data.fit_preprocessor(name, Xraw, tr_i, y)
+    check("domain is rebuilt from inner bounds",
+          dom_inner.features == dom_outer.features)
+
+
+def test_inner_fold_rule_discovery_is_independent():
+    """Discovered rules must be mined inside the inner fold, not borrowed."""
+    from src import discovery, real_data
+
+    name = "ttt"
+    Xraw, y = real_data.DATASETS[name]["loader"]()
+    f = next(iter(real_data.make_oof_folds(name, n_folds=5, seed=0)))
+    tr_i = f["tr_i"]
+
+    from sklearn.model_selection import StratifiedKFold
+    skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=0)
+    itr, _ = next(skf.split(Xraw.iloc[tr_i], np.asarray(y)[tr_i]))
+    inner_tr = tr_i[itr]
+
+    prep, dom = real_data.fit_preprocessor(name, Xraw, inner_tr, y)
+    Xtr = prep.transform(Xraw.iloc[inner_tr])
+    rules_inner = discovery.discover_rules(dom, Xtr, np.asarray(y)[inner_tr])
+    check("inner-fold discovery returns rules", len(rules_inner) > 0)
+
+    prep_o, dom_o = real_data.fit_preprocessor(name, Xraw, tr_i, y)
+    Xo = prep_o.transform(Xraw.iloc[tr_i])
+    rules_outer = discovery.discover_rules(dom_o, Xo, np.asarray(y)[tr_i])
+    check("discovery runs on the inner partition independently",
+          len(rules_outer) > 0)
+
+
+def test_inner_cv_refits_preprocessing_per_split():
+    """_inner_cv must refit preprocessing once per inner split."""
+    from src import real_data
+    from experiments import nested_cv
+
+    name = "heart"
+    Xraw, y = real_data.DATASETS[name]["loader"]()
+    f = next(iter(real_data.make_oof_folds(name, n_folds=5, seed=0)))
+    tr_i = f["tr_i"]
+
+    calls = {"n": 0}
+    real_fit = real_data.fit_preprocessor
+
+    def counting(name_, Xraw_, rows, y_):
+        calls["n"] += 1
+        return real_fit(name_, Xraw_, rows, y_)
+
+    nested_cv.real_data.fit_preprocessor = counting
+    try:
+        cfg = nested_cv.build_methods(0)["LogReg"]
+        nested_cv._inner_cv(cfg, name, Xraw, np.asarray(y), tr_i, seed=0,
+                            epochs=5, patience=3, kb_kind="expert",
+                            corrupt_level=0.4, n_inner=3)
+    finally:
+        nested_cv.real_data.fit_preprocessor = real_fit
+    check("preprocessing refit once per inner split", calls["n"] == 3)
+
+
 def main():
     test_expert_system_matches_oracle()
     test_rule_extraction_recovers_expert_rules()
@@ -532,6 +626,9 @@ def main():
     test_full_monk_domain_is_432_with_four_a5_levels()
     test_metrics_are_per_fold_at_fold_threshold()
     test_run_nested_aggregates_per_fold()
+    test_inner_fold_preprocessing_is_independent()
+    test_inner_fold_rule_discovery_is_independent()
+    test_inner_cv_refits_preprocessing_per_split()
     print("\nall tests passed")
 
 

@@ -60,10 +60,11 @@ models well calibrated. Finally, we repeat the study on small public
 datasets---UCI Cleveland heart disease, Pima diabetes, tic-tac-toe, the Wisconsin
 breast-cancer cytology data, and MONK-1/3---with hand-written knowledge bases.
 There the expert system is exact only when its
-knowledge is exact (tic-tac-toe, where it is the eight winning lines) and is the
-\emph{weakest} learned-comparable method when the knowledge is approximate; with
-class weighting \nexs{} is the most accurate model on heart ($0.836$) and the
-best-calibrated on tic-tac-toe (ECE $0.002$), while retaining the most expert
+knowledge is exact (tic-tac-toe, where it is the eight winning lines) and gives
+no reliable gain when the knowledge is approximate; \nexs{} with the expert rules
+attains the lowest calibration error on heart (ECE $0.089$) and, where the rules
+are the data-generating process, the best accuracy on tic-tac-toe ($1.000$) and
+MONK-3 ($0.987$, versus MLP $0.974$), while retaining the most expert
 logic of any learned model. Finally, we isolate \emph{when} expert rules help: in
 a $675$-run factorial study crossing knowledge-base corruption against training
 data, the expert prior is a monotone, positive contribution while the knowledge
@@ -88,7 +89,9 @@ removes two methodological flaws present in the exploratory analysis: data
 leakage (imputation, scaling and feature selection are now fitted on training
 rows only) and seed pseudo-replication ($5$-fold nested cross-validation with
 every row predicted exactly once, plus row-level paired McNemar tests with
-bootstrap intervals and Holm correction). Under that protocol the honest picture
+bootstrap intervals and Holm correction), and with preprocessing and rule
+discovery refit inside every inner fold so that model selection is independent of
+the rows it selects on. Under that protocol the honest picture
 is narrower. \nexs{} is \emph{not} uniformly more accurate than strong baselines:
 on the two datasets with approximate knowledge (heart, pima) it does not beat a
 plain MLP or a random forest, and those differences are not statistically
@@ -181,13 +184,13 @@ tied to the expert's certainty factors.
 \paragraph{Rule extraction and interpretability.}
 Post-hoc explainers such as LIME~\cite{ribeiro2016why} and SHAP approximate a
 black box locally; recent work extends these to multivariate time
-series~\cite{li2026gradientshap}. Extracting rules by distillation, as we do to
+series~\cite{southam2026gradientshap}. Extracting rules by distillation, as we do to
 evaluate logic recovery, is an established evaluation device but is rarely
 compared against ground-truth rules. Our rule-recovery metric closes that gap.
 
 \paragraph{Hybrid AI and expert systems.}
 Surveys of hybrid AI catalogue how rules and models are coupled in deployed
-systems~\cite{ruddle2023hybrid}, and applied reviews emphasise the need for
+systems~\cite{ruddle2026hybrid}, and applied reviews emphasise the need for
 interpretability in high-stakes domains~\cite{dash2022survey}. We contribute a
 quantitative, multi-criteria comparison on controlled data.
 
@@ -319,26 +322,36 @@ values in place so that imputation is a fitted transformation.
 The outer loop is $5$ stratified folds; each row falls in the test block of
 exactly one fold, so every observation is predicted exactly once out-of-fold.
 The inner loop is a $3$-fold cross-validation over the outer \emph{training} rows
-only, and it is used for hyperparameter search, early stopping and decision
-threshold selection. Hyperparameters are chosen by mean inner-fold AUC and the
+only, and it is used for hyperparameter search and decision threshold selection.
+Crucially, imputation, scaling and feature selection are \emph{refit inside every
+inner training fold}, and for the discovered-KB configuration the rules are
+\emph{re-mined} there too, before the candidate is scored on its held-out inner
+rows. So no inner-validation row influences the features a candidate sees or the
+rules it is given. Hyperparameters are chosen by mean inner-fold AUC and the
 threshold by the F1-optimal cut of the \emph{pooled} inner-fold predictions, so
-the test block never influences either choice. Each outer fold then carries its
-own operating point: a row is labelled at \emph{its own fold's} threshold and
+the outer test block never influences either choice. Each outer fold then carries
+its own operating point: a row is labelled at \emph{its own fold's} threshold and
 metrics are computed per fold and averaged, rather than scoring every fold at one
 pooled threshold (which would let one fold's operating point decide another
-fold's labels). Rule discovery for the \emph{discovered-KB} configuration also
-runs on the outer training rows only, so the discovered knowledge never sees the
-test block.
+fold's labels).
 
 \paragraph{Independent statistics.}
 Comparisons use the pooled out-of-fold predictions, so the unit of observation is
 a \emph{data row}, not a random seed. We report the mean paired accuracy
 difference with a $95\%$ row-level bootstrap interval, an exact McNemar test on
 the discordant pairs, and Holm-adjusted $p$-values across a family of five
-prespecified primary comparisons
+prespecified comparisons per dataset ($30$ in total)
 (\texttt{experiments/nested\_stats.py}). This replaces the earlier seed-level
 paired tests, which treated pseudo-replicates as independent samples and were
 anti-conservative.
+
+\paragraph{Stability across outer partitions.}
+To check that the conclusions do not hinge on one particular partition, we repeat
+the entire outer $5$-fold protocol under five independent partitions of the same
+rows and report mean\,$\pm$\,std accuracy per method (Table~\ref{tab:nested-seed}).
+Because these repetitions re-partition the \emph{same} observations they are a
+stability check, not independent evidence, so all inference above still uses the
+pooled out-of-fold rows of the primary partition.
 
 \paragraph{Configurations.}
 We compare the four \nexs{} configurations that the corrected protocol requires:
@@ -785,25 +798,26 @@ Table~\ref{tab:nested-main} gives accuracy, F1 and AUC for every method on all s
 datasets. Three points stand out, and two of them are negative results for \nexs{}.
 
 \begin{enumerate}
-  \item \textbf{On the two approximate-knowledge datasets, the rule layer gives no
-  reliable gain.} On heart, \nexs{} with the expert KB attains $0.822$ accuracy,
-  above the plain MLP ($0.799$) but below the random forest ($0.835$); the
-  \nexs{}--MLP gap ($+0.023$) is not significant ($p_{\mathrm{Holm}}=0.84$). On
-  pima, \nexs{} is at $0.741$ versus MLP $0.750$ and random forest $0.747$. The
-  approximate clinical knowledge is not a net benefit there.
+  \item \textbf{On the approximate-knowledge datasets, the rule layer gives no
+  reliable gain.} On heart, \nexs{} with the expert KB attains $0.815$ accuracy,
+  above the plain MLP ($0.812$) but below logistic regression ($0.827$) and the
+  random forest ($0.832$); the \nexs{}--MLP gap ($+0.003$) is not significant
+  ($p_{\mathrm{Holm}}=1.00$). On pima, \nexs{} is at $0.742$ versus MLP $0.751$
+  and random forest $0.746$. The approximate clinical knowledge is not a net
+  benefit there.
   \item \textbf{On the exact-knowledge datasets, \nexs{} leads where the rules are
   the data-generating process.} On tic-tac-toe \nexs{} reaches $1.000$ accuracy
-  and $1.000$ F1 versus MLP $0.990$/$0.992$, and \nexs{} with \emph{discovered}
+  and $1.000$ F1 versus MLP $0.988$/$0.991$, and \nexs{} with \emph{discovered}
   rules also reaches $1.000$; both gaps are Holm-significant. On MONK-1 \nexs{}
-  matches the MLP at $1.000$, and on MONK-3 it leads ($0.989$ vs.\ MLP $0.973$,
+  matches the MLP at $1.000$, and on MONK-3 it leads ($0.987$ vs.\ MLP $0.974$,
   $p_{\mathrm{Holm}}=0.020$). On the external KBANN benchmark (wbc) \nexs{} is
-  $0.967$ versus MLP $0.970$ --- a small non-significant deficit.
+  $0.970$ versus MLP $0.970$ --- a tie.
   \item \textbf{Corrupting the knowledge base barely changes accuracy on the real
   datasets.} \texttt{NEXS\_Corrupt} (about $40\%$ of rules dropped and surviving
   thresholds jittered) scores within one point of \texttt{NEXS\_Expert} on heart,
   pima and wbc, which is consistent with the neural head carrying most of the
   predictive signal when knowledge is approximate; the gap is larger on the
-  exact-rule domains (MONK-1 $0.973$ vs.\ $1.000$).
+  exact-rule domains (MONK-1 $0.974$ vs.\ $1.000$).
 \end{enumerate}
 
 \input{../figures/table_nested_main.tex}
@@ -816,16 +830,30 @@ knowledge: on tic-tac-toe \texttt{NEXS\_Expert} and \texttt{NEXS\_Discovered} bo
 beat the MLP ($\Delta=+0.010$, $p_{\mathrm{Holm}}=0.008$) and \texttt{NEXS\_Expert}
 beats gradient boosting ($+0.016$, $p_{\mathrm{Holm}}=0.0003$); on MONK-1
 \texttt{NEXS\_Expert} beats gradient boosting ($+0.054$, $p_{\mathrm{Holm}}<0.001$)
-and the corrupted KB ($+0.027$, $p_{\mathrm{Holm}}=0.0002$); on MONK-3
+and the corrupted KB ($+0.029$, $p_{\mathrm{Holm}}=0.0001$); on MONK-3
 \texttt{NEXS\_Expert} beats the MLP ($+0.016$, $p_{\mathrm{Holm}}=0.020$); and on
-pima \texttt{NEXS\_Expert} beats gradient boosting ($+0.046$,
-$p_{\mathrm{Holm}}=0.027$). Every \nexs{} comparison against the MLP on heart,
+pima \texttt{NEXS\_Expert} beats gradient boosting ($+0.052$,
+$p_{\mathrm{Holm}}=0.005$). Every \nexs{} comparison against the MLP on heart,
 pima and wbc is non-significant after correction: the paired differences are
-$+0.023$, $-0.009$ and $-0.003$ with intervals straddling zero. In particular the
+$+0.003$, $-0.009$ and $0.000$ with intervals straddling zero. In particular the
 headline claim that \nexs{} beats the MLP on the clinical datasets is \emph{not}
 supported. We report this as a null result rather than a weak positive one.
 
 \input{../figures/table_nested_stats.tex}
+
+\paragraph{Stability across outer-CV repetitions.}
+Table~\ref{tab:nested-seed} repeats the whole nested protocol under five
+independent outer-fold partitions of the same rows. The spread is small relative
+to the between-method gaps that matter: \nexs{} on tic-tac-toe is
+$0.997\pm0.002$ and on MONK-3 $0.987\pm0.002$, while the largest per-cell
+standard deviation is the decision tree on MONK-1 ($\pm0.060$). The
+qualitative conclusions are stable across repetitions --- \nexs{} leads on the
+exact-rule domains and does not lead on the approximate-knowledge ones. Because
+these repetitions reuse the same observations, they are a \emph{stability} check
+only; every inferential statement above rests on the pooled out-of-fold rows of
+the primary repetition, where the unit of observation is a data row.
+
+\input{../figures/table_nested_seed.tex}
 
 \paragraph{Structural rule recovery is non-circular and partial.}
 Table~\ref{tab:nested-structural} measures discovery out-of-fold against published
@@ -834,7 +862,7 @@ logically equivalent to the eight tic-tac-toe winning lines (semantic rule F1
 $=1.000$, and the discovered DNF agrees with the true formula on $100\%$ of the
 full input domain). MONK-3 is the honest negative case for \emph{set} recovery:
 because its training labels carry $5\%$ class noise, the learner returns $10.8$
-rules against $7$ true ones and semantic F1 falls to $0.395$. It is, however, no
+rules against $7$ true ones and semantic F1 falls to $0.393$. It is, however, no
 longer a negative case for \emph{behaviour}: the discovered DNF agrees with the
 published formula on $99.8\%$ of the domain, i.e.\ the extra rules are harmless
 refinements rather than wrong logic. Recovery is therefore demonstrated where the
