@@ -57,7 +57,12 @@ random forest. We also find that a classical certainty-factor expert system,
 despite being the most logic-faithful and shift-robust predictor, is the
 \emph{worst} calibrated (ECE ${\sim}0.09$), because its certainty factors are
 heuristics rather than probabilities; isotonic calibration makes all learned
-models well calibrated. We release code, data generators, and a fully
+models well calibrated. Finally, we repeat the study on three small public
+datasets---UCI Cleveland heart disease, Pima diabetes, and tic-tac-toe---with
+hand-written knowledge bases. There the expert system is exact only when its
+knowledge is exact (tic-tac-toe, where it is the eight winning lines) and is the
+\emph{weakest} method when the knowledge is approximate, while \nexs{} retains
+the most expert logic of any learned model. We release code, data, and a fully
 reproducible experiment suite.
 \end{abstract}
 
@@ -382,6 +387,122 @@ interpretability and logic fidelity.
 
 \input{../figures/table_latency.tex}
 
+\section{Real-Data Evaluation}
+\label{sec:real}
+Synthetic data give us ground-truth rules but not realism, so we repeat the study
+on three small, standard, public datasets with hand-written expert knowledge
+bases. The datasets are chosen to cover the regimes that matter.
+
+\begin{itemize}
+  \item \textbf{heart} --- UCI Cleveland heart disease ($n{=}303$). The knowledge
+  base uses published clinical cut-offs (hypertension $\ge 140$ mmHg,
+  hyperlipidemia $\ge 240$ mg/dl, exercise-induced angina, ST depression
+  $\ge 1.0$, \dots). These guidelines are \emph{not} the data-generating process,
+  so the knowledge is genuinely approximate --- the realistic regime.
+  \item \textbf{pima} --- Pima Indians diabetes ($n{=}768$). Knowledge base from
+  ADA/WHO cut-offs (fasting glucose $\ge 126$ mg/dl, obesity BMI $\ge 30$).
+  \item \textbf{ttt} --- tic-tac-toe endgame ($n{=}958$). Here the eight winning
+  lines are a \emph{genuine} ground truth, so rule recovery can be measured
+  against the true logic. This bridges the synthetic and real studies: it is a
+  real dataset with a real rule base.
+\end{itemize}
+
+Features are min-max normalised on the training split and thresholds are mapped
+through the same transform, so the differentiable-logic machinery is unchanged.
+Robustness (E5) is measured on \emph{natural subgroups} of the test set (older
+patients, obese patients) rather than a synthetic shift, which is the realistic
+analogue. We use five seeds and report means.
+
+\paragraph{Results.}
+Table~\ref{tab:realmain} and Figures~\ref{fig:realmain}--\ref{fig:realabl}
+summarise. Three findings stand out.
+
+\begin{enumerate}
+  \item \textbf{The expert system is exact where the knowledge is exact, and only
+  there.} On tic-tac-toe the KB is the true logic and the expert system attains
+  $1.000$ accuracy, F1, and AUC. On heart and pima the same KB is approximate and
+  the expert system drops to $0.75$--$0.76$ accuracy, \emph{below} every learned
+  model. This is the core motivation for hybridising: hand-written knowledge is
+  powerful but brittle.
+  \item \textbf{Learned models overtake the expert system on real data.} On heart
+  the random forest reaches $0.836$ accuracy and $0.918$ AUC; on pima gradient
+  boosting reaches $0.806$ AUC. On tic-tac-toe, where a correct logical model is
+  available, the neural models essentially match the expert system
+  (NEXS $0.995$ vs.\ $1.000$) and NEXS achieves the best AUC ($1.000$) and the
+  lowest ECE ($0.002$).
+  \item \textbf{\nexs{} keeps the most expert logic among learned models.}
+  Logic fidelity --- agreement with the expert's decisions --- is highest for
+  \nexs{} on pima ($0.844$ vs.\ MLP $0.718$, semantic loss $0.821$) and on
+  tic-tac-toe ($0.993$ vs.\ MLP $0.977$, semantic loss $0.984$), and competitive
+  on heart ($0.734$, close to the $0.754$--$0.757$ of the MLP and semantic-loss
+  models). On tic-tac-toe \nexs{} also has the best AUC ($1.000$) and the lowest
+  ECE ($0.002$) of any learned model.
+\end{enumerate}
+
+\paragraph{Accuracy is not rule recovery.}
+Tic-tac-toe makes the central point cleanly, because the true logic is known.
+The expert system reproduces the eight winning lines exactly (rule F1 $=1.000$),
+while the learned models recover almost none of them --- \nexs{} recovers at
+least one line (rule F1 $0.015$) and the others recover none --- even though
+every learned model reaches ${\sim}99\%$ accuracy and \nexs{} exceeds the expert
+system on AUC. High accuracy therefore does \emph{not} imply that a model has
+learned the rules, which is precisely why measuring rule recovery matters.
+
+\input{../figures/table_real_main.tex}
+
+\begin{figure}[t]\centering
+  \includegraphics[width=\linewidth]{fig_real_main.png}
+  \caption{Real data: accuracy, F1, ROC-AUC and calibration across the three
+  datasets (mean over five seeds).}
+  \label{fig:realmain}
+\end{figure}
+
+\begin{figure}[t]\centering
+  \includegraphics[width=\linewidth]{fig_real_logic.png}
+  \caption{Real data: rule recovery and logic fidelity. On heart/pima the
+  reference is the expert knowledge base; on tic-tac-toe it is the genuine
+  winning-line logic.}
+  \label{fig:real_logic}
+\end{figure}
+
+\paragraph{Calibration, subgroups, and efficiency.}
+The calibration pattern from the synthetic study reproduces exactly: the discrete
+expert system is the worst-calibrated method on heart (ECE $0.222$) and pima
+($0.216$), while the learned models are $0.07$--$0.12$. Table~\ref{tab:realsub}
+shows accuracy on natural subgroups; the expert system is comparatively more
+stable across the pima BMI split, but is beaten on both heart age groups by the
+learned models. Table~\ref{tab:realeff} shows data efficiency: the expert system
+is flat (it needs no data), the learned models improve with data, and \nexs{}
+tracks the best learned model. Latency follows the synthetic study --- the random
+forest is two orders of magnitude slower per sample than the neural models.
+
+\begin{figure}[t]\centering
+  \includegraphics[width=\linewidth]{fig_real_efficiency.png}
+  \caption{Real data: F1 versus training size.}
+  \label{fig:realeff}
+\end{figure}
+
+\begin{figure}[t]\centering
+  \includegraphics[width=\linewidth]{fig_real_ablation.png}
+  \caption{Real data: ablation of \nexs{}.}
+  \label{fig:realabl}
+\end{figure}
+
+\input{../figures/table_real_subgroup.tex}
+\input{../figures/table_real_ablation.tex}
+\input{../figures/table_real_efficiency.tex}
+
+\paragraph{Takeaway.}
+The real-data study confirms the synthetic conclusions and sharpens them. An
+expert system is only as good as its knowledge: where the rules are exact
+(tic-tac-toe) it is perfect and recovers the true logic exactly, while the
+learned models match its accuracy but not its rules; where the rules are
+approximate (heart, pima) it is the \emph{weakest} method on accuracy and the
+learned models --- with \nexs{} retaining the most expert logic --- are the
+better choice. A deployable system should therefore start from the expert rules
+and \emph{learn the corrections}, keeping the rule layer inspectable, which is
+what \nexs{} is designed to do.
+
 \section{Discussion}
 \label{sec:discussion}
 Three findings generalise beyond these benchmarks. First, \emph{where} knowledge
@@ -403,13 +524,23 @@ must learn from data yet remain rule-inspectable.
 
 \section{Threats to Validity}
 \label{sec:threats}
-Our benchmarks are synthetic, which buys ground-truth rules at the cost of
-ecological realism; the regimes and noise levels are plausible but not drawn from
-a deployed system. Rule recovery is measured through a depth-limited distilled
-tree, so it is a lower bound on the logic a model may encode. We evaluate two
-domains and three seeds; the qualitative ordering is stable across them, but
-effect sizes should be read as indicative. The expert rule base is a controlled
-perturbation of the ground truth rather than a real elicited knowledge base.
+Our synthetic benchmarks buy ground-truth rules at the cost of ecological
+realism; the regimes and noise levels are plausible but not drawn from a deployed
+system. Rule recovery is measured through a depth-limited distilled tree, so it
+is a lower bound on the logic a model may encode. We evaluate two synthetic
+domains over three seeds and three real datasets over five seeds; the qualitative
+ordering is stable across them, but effect sizes should be read as indicative.
+
+On the real datasets the expert knowledge bases for heart and pima are written
+from published clinical cut-offs and are \emph{not} the data-generating process,
+so for those two datasets "rule recovery" measures recovery of the expert KB
+rather than of a hidden truth, and logic fidelity measures agreement with the KB
+oracle. Only tic-tac-toe has a genuine ground-truth rule base, and it is the
+cleanest evidence in the real study. Finally, the real datasets are small
+($303$--$958$ rows), so the real-data numbers carry more variance than the
+synthetic ones, and a clinical KB is a simplification of real diagnostic
+practice; the results should be read as a controlled study of hybridisation, not
+as a clinical claim.
 
 \section{Conclusion}
 \label{sec:conclusion}
@@ -421,9 +552,11 @@ the discrete expert system or a random forest can be preferable. The broader
 lesson is that measuring \emph{rule recovery}, not just accuracy, changes the
 ranking of neuro-symbolic methods: loss-only couplings look adequate until the
 recovered logic is inspected, and the strongest raw-accuracy models are among the
-least rule-faithful. Future work should validate \nexs{} on real elicited
-knowledge bases and on public tabular datasets where rules can be approximately
-recovered, and should study learned calibration of certainty factors directly.
+least rule-faithful. On three real datasets the same pattern holds and sharpens:
+an expert system is perfect only when its knowledge is exact, and even $99\%$-accurate
+neural models do not recover the true rules. Future work should validate \nexs{}
+on larger real datasets and on elicited knowledge bases with genuine ground truth,
+and should study learned calibration of certainty factors directly.
 
 \bibliographystyle{plain}
 \bibliography{references}

@@ -1,0 +1,27 @@
+\begin{table}[t]\centering
+\caption{Real-data ablation.}
+\label{tab:realabl}
+\begin{tabular}{llccc}
+\toprule
+Dataset & Variant & Acc & F1 & LogicFid \\
+\midrule
+heart & NEXS(full) & 0.846 & 0.853 & 0.774 \\
+heart & NEXS(no rule layer) & 0.823 & 0.833 & 0.754 \\
+heart & NEXS(rule layer only) & 0.764 & 0.775 & 0.889 \\
+heart & NEXS(no semantic loss) & 0.830 & 0.839 & 0.757 \\
+heart & NEXS(no expert prior) & 0.830 & 0.837 & 0.761 \\
+\midrule
+pima & NEXS(full) & 0.703 & 0.666 & 0.779 \\
+pima & NEXS(no rule layer) & 0.687 & 0.653 & 0.718 \\
+pima & NEXS(rule layer only) & 0.670 & 0.642 & 0.899 \\
+pima & NEXS(no semantic loss) & 0.706 & 0.669 & 0.800 \\
+pima & NEXS(no expert prior) & 0.701 & 0.665 & 0.794 \\
+\midrule
+ttt & NEXS(full) & 0.998 & 0.998 & 0.992 \\
+ttt & NEXS(no rule layer) & 0.992 & 0.994 & 0.977 \\
+ttt & NEXS(rule layer only) & 1.000 & 1.000 & 1.000 \\
+ttt & NEXS(no semantic loss) & 0.998 & 0.998 & 0.994 \\
+ttt & NEXS(no expert prior) & 0.998 & 0.998 & 0.996 \\
+\bottomrule
+\end{tabular}
+\end{table}

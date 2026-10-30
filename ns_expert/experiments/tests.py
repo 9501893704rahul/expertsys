@@ -70,12 +70,77 @@ def test_membership_monotone():
     check("soft membership is monotone in the feature", np.all(np.diff(m) >= -1e-9))
 
 
+def test_real_datasets_load():
+    from src import real_data
+
+    for name in ["heart", "pima", "ttt"]:
+        d, tr, va, te = real_data.load_real(name, seed=0)
+        n = len(tr.y) + len(va.y) + len(te.y)
+        check(f"real {name} splits are non-empty and disjoint", n > 0 and
+              len(tr.y) > 0 and len(va.y) > 0 and len(te.y) > 0)
+        check(f"real {name} features are normalised to [0,1]",
+              float(pd.concat([tr.X, va.X, te.X]).to_numpy().min()) >= -1e-9 and
+              float(pd.concat([tr.X, va.X, te.X]).to_numpy().max()) <= 1 + 1e-9)
+        check(f"real {name} has expert rules", len(d.expert_rules) > 0)
+
+
+def test_ttt_expert_system_is_exact():
+    """The eight winning lines are the true logic, so the KB must be perfect."""
+    from src import real_data
+
+    d, tr, va, te = real_data.load_real("ttt", seed=0)
+    out = symbolic_run(d, te.X, soft=False)
+    check("ttt expert system reproduces the true winning-line logic exactly",
+          float((out["y_hat"] == te.y).mean()) == 1.0)
+
+
+def test_support_aware_literal_match():
+    """`>0.5` and `>=0.75` are the same partition on the support {0,0.5,1}."""
+    sup = {"cell": np.array([0.0, 0.5, 1.0])}
+    check("literal match is support-aware on discrete features",
+          rules._literal_match("cell>0.5", "cell>=0.75", support=sup))
+    check("literal match still separates real differences",
+          not rules._literal_match("cell>=1.0", "cell>=0.25", support=sup))
+
+
+def test_literal_parse_handles_digit_names():
+    """Feature names may contain digits (tic-tac-toe cells are c00..c22)."""
+    var, op, thr = rules._parse_literal("c12>=0.750")
+    check("literal parser accepts digits in feature names",
+          var == "c12" and op == ">=" and abs(thr - 0.75) < 1e-9)
+
+
+def test_ttt_rule_extraction_is_nonzero():
+    """At least the proposed model recovers some of the true winning lines."""
+    from src import real_data
+
+    d, tr, va, te = real_data.load_real("ttt", seed=0)
+    sup = real_data.feature_support(pd.concat([tr.X, va.X, te.X]))
+    ref = [frozenset(str(l) for l in r.body)
+           for r in real_data.ground_truth_rules("ttt")]
+    m = models.NEXS(d, seed=0)
+    m.fit(tr.X.to_numpy(), tr.y, va.X.to_numpy(), va.y)
+
+    def dec(X):
+        return (m.predict_proba(np.asarray(X, dtype=float)) >= 0.5).astype(int)
+
+    pred = rules.extract_rules(dec, d, depth=5, seed=1, support=sup)
+    r = rules.rule_set_match(pred, ref, support=sup)
+    check(f"ttt rule extraction recovers at least one true line (tp={r['tp']})",
+          r["tp"] >= 1)
+
+
 def main():
     test_expert_system_matches_oracle()
     test_rule_extraction_recovers_expert_rules()
     test_nexs_forward_and_gradients()
     test_oracle_deterministic()
     test_membership_monotone()
+    test_real_datasets_load()
+    test_ttt_expert_system_is_exact()
+    test_support_aware_literal_match()
+    test_literal_parse_handles_digit_names()
+    test_ttt_rule_extraction_is_nonzero()
     print("\nall tests passed")
 
 

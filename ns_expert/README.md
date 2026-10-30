@@ -16,14 +16,55 @@ accuracy but whether each model *recovers the underlying logic*.
 src/
   knowledge.py       domains, ground-truth rules, imperfect "expert" rules
   data.py            regime-mixture data generator with hidden concepts
+  real_data.py       real datasets (heart, pima, tic-tac-toe) + clinical KBs
   expert_system.py   forward chaining + MYCIN certainty factors
   models.py          MLP, SemanticLoss, NEXS (differentiable rule layer)
   baselines.py       logistic regression, decision tree, RF, gradient boosting
   rules.py           deterministic oracle, rule extraction, recovery metrics
 experiments/
-  run_experiments.py runs E1..E7 and writes results/*.csv
-  make_figures.py    builds figures/*.png and figures/table_*.tex
+  run_experiments.py      runs synthetic E1..E7 -> results/*.csv
+  run_real_experiments.py runs real-data E1..E7 -> results/real_*.csv
+  make_figures.py         synthetic figures/tables
+  make_real_figures.py    real-data figures/tables
 paper/               LaTeX manuscript + references.bib
+data/                small real datasets (fetched, committed)
+```
+
+## Real datasets
+
+Three small, standard datasets are used (`src/real_data.py`):
+
+| Dataset | Rows | Task | Knowledge source |
+|---------|------|------|------------------|
+| `heart` | 303 | UCI Cleveland heart disease | clinical guideline cut-offs (approx.) |
+| `pima`  | 768 | Pima Indians diabetes | ADA/WHO cut-offs (approx.) |
+| `ttt`   | 958 | tic-tac-toe endgame | **genuine** logic: 8 winning lines |
+
+On `heart`/`pima` there is no ground-truth rule base, so rule recovery is
+measured against the *expert KB* and logic fidelity against the *KB oracle* — how
+much of the expert's logic the learned model preserves. On `ttt` the eight
+winning lines are a real ground truth, so rule recovery is measured against the
+true logic, bridging the synthetic and real studies.
+
+Data are fetched from UCI / public mirrors into `data/` and committed, so runs
+are offline-reproducible.
+
+Headline real-data results (mean over 5 seeds, `results/real_e1_main.csv`):
+
+| Dataset | ESS acc | Best learned acc | NEXS logic fidelity | ESS rule F1 |
+|---------|---------|------------------|---------------------|-------------|
+| heart | 0.751 | 0.836 (RF) | 0.734 | 1.000 |
+| pima  | 0.756 | 0.721 (SemanticLoss) | **0.844** | 1.000 |
+| ttt   | 1.000 | 0.995 (NEXS) | **0.993** | 1.000 |
+
+The pattern: where the KB is exact (ttt) the expert system is perfect and
+recovers the true logic exactly, while learned models match its accuracy but not
+its rules; where the KB is approximate (heart, pima) the expert system is the
+weakest on accuracy and NEXS retains the most expert logic.
+
+```bash
+PYTHONPATH=. python experiments/run_real_experiments.py --seeds 0 1 2 3 4
+PYTHONPATH=. python experiments/make_real_figures.py
 ```
 
 ## Reproduce

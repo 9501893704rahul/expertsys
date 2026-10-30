@@ -63,17 +63,43 @@ def uniform_grid(domain: Domain, n: int, seed: int = 7) -> pd.DataFrame:
     return pd.DataFrame(cols)
 
 
+def _support_grid(domain: Domain, support: dict, n: int, seed: int = 7) -> pd.DataFrame:
+    """Grid that samples low-cardinality features only on their real values."""
+    rng = np.random.default_rng(seed)
+    cols = {}
+    for f in domain.features:
+        vals = support.get(f)
+        if vals is not None and len(vals) > 0:
+            vals = np.asarray(sorted(set(np.asarray(vals, dtype=float))))
+            cols[f] = vals[rng.integers(0, len(vals), n)]
+        elif f in domain.binary_features:
+            cols[f] = (rng.random(n) < 0.5).astype(float)
+        else:
+            cols[f] = rng.random(n)
+    return pd.DataFrame(cols)
+
+
 # --------------------------------------------------------------------------- #
 # rule extraction from a black-box decision function
 # --------------------------------------------------------------------------- #
 def extract_rules(decision_fn, domain: Domain, n: int = 4000, depth: int = 3,
-                  seed: int = 0) -> list[frozenset[str]]:
+                  seed: int = 0, support: dict | None = None,
+                  grid_n: int = 4000) -> list[frozenset[str]]:
     """Distil a depth-limited decision tree from any binary decision function.
 
     The tree is fit on uniform samples so that the extracted rules describe the
     model's global logic rather than the training support.
+
+    ``support`` optionally maps low-cardinality features to their observed values.
+    Without it a continuous grid is used, which lets the tree split at
+    interpolated points (e.g. ``cell <= 0.549``) and hides that a model learned
+    the exact discrete rule.  With it those features are sampled only on their
+    real values, so the extracted literals line up with the true logic.
     """
-    Xg = uniform_grid(domain, n, seed=seed)
+    if support:
+        Xg = _support_grid(domain, support, grid_n, seed)
+    else:
+        Xg = uniform_grid(domain, n, seed=seed)
     yg = decision_fn(Xg)
     tree = DecisionTreeClassifier(max_depth=depth, min_samples_leaf=max(20, n // 200),
                                   random_state=seed).fit(Xg.to_numpy(), yg)
@@ -105,37 +131,54 @@ def _tree_to_rules(tree: DecisionTreeClassifier, features: tuple[str, ...]) -> l
 def _parse_literal(s: str):
     import re
 
-    m = re.match(r"([A-Za-z_]+)(<=|>=|>|<|=)([-0-9.]+)", s)
+    m = re.match(r"([A-Za-z_][A-Za-z0-9_]*)(<=|>=|>|<|=)(-?[0-9.]+)", s)
     return (m.group(1), m.group(2), float(m.group(3))) if m else (s, "", np.nan)
 
 
 def _indicator(var: str, op: str, thr: float, grid: np.ndarray) -> np.ndarray:
-    if op in (">=", ">"):
+    if op == ">=":
         return grid >= thr
-    if op in ("<=", "<"):
+    if op == ">":
+        return grid > thr
+    if op == "<=":
         return grid <= thr
+    if op == "<":
+        return grid < thr
     return np.isclose(grid, thr, atol=1e-9)
 
 
-def _literal_match(a: str, b: str, tol: float = 0.06) -> bool:
+def _literal_match(a: str, b: str, tol: float = 0.06,
+                   support: dict[str, np.ndarray] | None = None) -> bool:
     """Semantic literal match: same variable and (near-)identical partition.
 
     Comparing operators textually fails on equivalent forms (``x>=0.5`` vs
     ``x>0.4``, ``smoking=1`` vs ``smoking>0.5``). We instead compare the
-    indicator sets of the two literals over a fine grid of the feature domain
-    and accept the match when they differ on at most ``tol`` of the grid.
+    indicator sets of the two literals and accept the match when they differ on
+    at most ``tol`` of the evaluated points.
+
+    ``support`` maps a variable to the values on which the partition is judged.
+    On continuous data the default is a fine grid over ``[0, 1]``. On data with
+    discrete support (e.g. the tic-tac-toe cells in ``{0, 0.5, 1}``) the grid
+    would wrongly separate ``>0.5`` from ``>=0.75`` even though they select
+    exactly the same rows; passing the observed values fixes that.
     """
     va, oa, ta = _parse_literal(a)
     vb, ob, tb = _parse_literal(b)
     if va != vb or np.isnan(ta) or np.isnan(tb):
         return False
-    grid = np.linspace(0.0, 1.0, 201)
+    if support is not None and va in support:
+        grid = np.asarray(support[va], dtype=float)
+    else:
+        grid = np.linspace(0.0, 1.0, 201)
+    if grid.size == 0:
+        return False
     ia, ib = _indicator(va, oa, ta, grid), _indicator(vb, ob, tb, grid)
     return float(np.mean(ia != ib)) <= tol
 
 
 def rule_set_match(pred: list[frozenset[str]], ref: list[frozenset[str]],
-                   tol: float = 0.06) -> dict:
+                   tol: float = 0.06,
+                   support: dict[str, np.ndarray] | None = None) -> dict:
     """Greedy bipartite matching of predicted vs reference rules.
 
     A match requires that every literal of the shorter rule is matched by a
@@ -150,7 +193,7 @@ def rule_set_match(pred: list[frozenset[str]], ref: list[frozenset[str]],
             if j in used:
                 continue
             short, long = (p, r) if len(p) <= len(r) else (r, p)
-            if all(any(_literal_match(a, b, tol) for b in long) for a in short):
+            if all(any(_literal_match(a, b, tol, support) for b in long) for a in short):
                 jac = len(short) / len(set(p) | set(r))
                 if best is None or jac > best:
                     best, best_j = jac, j

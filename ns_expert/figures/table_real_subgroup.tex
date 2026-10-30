@@ -1,0 +1,17 @@
+\begin{table}[t]\centering
+\caption{Real-data accuracy on natural subgroups.}
+\label{tab:realsub}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llccccccccc}
+\toprule
+Dataset & Subgroup & ESS(discrete) & ESS(soft) & LogReg & DecisionTree & RandomForest & GradientBoosting & MLP & SemanticLoss & NEXS(proposed) \\
+\midrule
+heart & age=high & 0.721 & n/a & n/a & n/a & 0.814 & n/a & 0.814 & 0.808 & 0.802 \\
+heart & age=low & 0.785 & n/a & n/a & n/a & 0.866 & n/a & 0.833 & 0.852 & 0.838 \\
+pima & bmi>=30=high & 0.732 & n/a & n/a & n/a & 0.623 & n/a & 0.661 & 0.661 & 0.677 \\
+pima & bmi>=30=low & 0.761 & n/a & n/a & n/a & 0.717 & n/a & 0.695 & 0.725 & 0.710 \\
+ttt & x-majority=high & 1.000 & n/a & n/a & n/a & 0.937 & n/a & 0.987 & 0.992 & 0.992 \\
+ttt & x-majority=low & 1.000 & n/a & n/a & n/a & 0.954 & n/a & 1.000 & 1.000 & 1.000 \\
+\bottomrule
+\end{tabular}}
+\end{table}
