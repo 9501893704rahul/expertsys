@@ -1,4 +1,4 @@
-"""Genuine structural rule-recovery test.
+"""Logic fidelity and non-circular rule discovery on the full input domain.
 
 Motivation
 ----------
@@ -9,18 +9,19 @@ so it reports ``rule-F1 = 0`` for *every* model even when the model's decisions
 agree with the true logic. That makes the metric unable to answer the question it
 is asked to answer.
 
-This script measures structural recovery directly instead:
+This script measures two things on the complete input domain:
 
-1. enumerate the finite domain on which the target logic is defined (for
-   tic-tac-toe, all ``3^9`` boards over {x, o, blank});
-2. check the model's decision function agrees with the ground-truth DNF on that
-   whole domain (``decision_agreement``);
-3. report whether the model's own rule layer *is* the ground-truth DNF ---
-   exact set equality between the learned rule literals and the true lines
-   (``structural_exact_match``), which is the honest, strong notion of recovery.
+1. ``decision_agreement`` --- whether each model's decisions match the
+   ground-truth DNF over the whole domain (for tic-tac-toe, all ``3^9`` boards
+   over {x, o, blank}; for MONK, all 432 attribute tuples);
+2. ``injected_exact_match`` --- whether the model's rule layer equals the true
+   rules. This is only an implementation check: ``NEXS`` *injects* its rule
+   layer from the expert KB (``self.rules = list(domain.expert_rules)``), so it
+   cannot be read as rule discovery.
 
-The expert knowledge base on tic-tac-toe *is* the ground truth, so this is a
-fair test of whether the differentiable rule layer recovers it.
+Genuine, non-circular discovery is measured by ``experiments/rule_discovery.py``
+(a candidate-generation learner trained on labels alone), whose metrics are
+carried here as the ``discovered_*`` columns.
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src import models, real_data  # noqa: E402
 from experiments.run_experiments import _decisions, _evaluate  # noqa: E402
+from experiments.rule_discovery import discover_rules_only  # noqa: E402
 
 X, O, B = 1.0, 0.0, 0.5
 
@@ -50,8 +52,9 @@ def full_ttt_domain() -> tuple[pd.DataFrame, np.ndarray]:
     return Xd, np.asarray(labels, dtype=int)
 
 
-# attribute ranges for the MONK domain, in file column order a1..a6
-MONK_RANGES = [(1, 2), (1, 2, 3), (1, 2, 3), (1, 2), (1, 2, 3, 4), (1, 2)]
+# attribute domains per the UCI codebook, in file column order a1..a6:
+# a1,a2 in {1,2,3}; a3 in {1,2}; a4 in {1,2,3}; a5 in {1,2,3,4}; a6 in {1,2}.
+MONK_RANGES = [(1, 2, 3), (1, 2, 3), (1, 2), (1, 2, 3), (1, 2, 3, 4), (1, 2)]
 
 
 def full_monk_domain(version: int) -> tuple[pd.DataFrame, np.ndarray]:
@@ -100,10 +103,17 @@ def evaluate_structural(name: str, seeds: list[int], epochs: int,
         agree = float((np.asarray(_decisions(model, mm.get("threshold", 0.5))(Xd),
                                   dtype=int) == yd).mean())
 
-        # the model's own rule layer, not a distilled surrogate
+        # NOTE: NEXS *injects* its rule layer from the expert KB
+        # (``self.rules = list(domain.expert_rules)``), so ``learned_set`` below
+        # is the supplied KB, not a discovered one.  It is reported only as an
+        # implementation check (the layer faithfully exposes what it was given);
+        # it must NOT be read as rule discovery.  Genuine, non-circular
+        # discovery is measured by ``discover_rules_only`` (candidate-generation
+        # learner trained on labels alone).
         learned_set = {frozenset(str(l) for l in r.body)
                        for r in model.rules if r.head == domain.label}
         overlap = len(learned_set & true_set)
+        disc = discover_rules_only(name, seed)
 
         # reference points on the same full domain
         oracle_agree = float((_kb_predict(name, Xd, lo, hi) == yd).mean())
@@ -116,17 +126,19 @@ def evaluate_structural(name: str, seeds: list[int], epochs: int,
                                       dtype=int) == yd).mean())
 
         rows.append(dict(dataset=name, seed=seed, n_true=len(true_set),
-                         n_learned=len(learned_set),
-                         structural_exact_match=int(learned_set == true_set),
-                         rules_recovered=overlap,
-                         rule_recall=overlap / max(1, len(true_set)),
-                         rule_precision=overlap / max(1, len(learned_set)),
+                         n_injected=len(learned_set),
+                         injected_exact_match=int(learned_set == true_set),
+                         injected_recall=overlap / max(1, len(true_set)),
+                         injected_precision=overlap / max(1, len(learned_set)),
                          decision_agreement=agree,
                          oracle_agreement=oracle_agree,
-                         mlp_agreement=mlp_agree))
+                         mlp_agreement=mlp_agree,
+                         **disc))
         print(f"  {name} seed={seed}: NEXS={agree:.4f} oracle={oracle_agree:.4f} "
-              f"MLP={mlp_agree:.4f} exact={int(learned_set == true_set)} "
-              f"recovered={overlap}/{len(true_set)}", flush=True)
+              f"MLP={mlp_agree:.4f} | discovery exact="
+              f"{disc['discovered_exact_match']} "
+              f"recall={disc['discovered_recall']:.2f} "
+              f"agree={disc['discovered_agreement']:.3f}", flush=True)
     return pd.DataFrame(rows)
 
 
@@ -152,8 +164,10 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     df.to_csv(out / "structural_recovery.csv", index=False)
     print(df.groupby("dataset")[["decision_agreement", "oracle_agreement",
-                                 "mlp_agreement", "structural_exact_match",
-                                 "rule_recall", "rule_precision"]].mean().round(4).to_string())
+                                 "mlp_agreement", "injected_exact_match",
+                                 "discovered_exact_match",
+                                 "discovered_recall", "discovered_precision",
+                                 "discovered_agreement"]].mean().round(4).to_string())
     print("written ->", out)
 
 

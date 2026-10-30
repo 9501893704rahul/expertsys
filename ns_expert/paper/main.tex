@@ -75,9 +75,14 @@ are pseudo-replicates; under a clean out-of-fold protocol in which every row is
 predicted exactly once, \nexs{} is at least as accurate as the strongest baseline
 rather than significantly better. On two further rule-governed benchmarks with
 published ground-truth formulas (MONK-1 and MONK-3) the neuro-symbolic model
-matches the best baselines, and on all three logical domains its rule layer is
-\emph{structurally} the true rule set (exact set equality, precision and recall
-$1.0$). We release code, data, and a fully reproducible experiment suite.
+matches the best baselines. We separate two questions that are easily conflated:
+\nexs{} \emph{injects} its rule layer from the supplied knowledge, so it is not
+evidence of discovery, whereas an independent learner trained on labels alone
+recovers the exact ground-truth rule sets on MONK-1 and MONK-3 (precision and
+recall $1.0$) and a near-exact set on tic-tac-toe. Crucially, a correct rule
+layer is not obeyed everywhere: even with the exact rules, the fused model agrees
+with the true label on $97$--$98\%$ of the MONK domain but only $63\%$ of
+tic-tac-toe. We release code, data, and a fully reproducible experiment suite.
 \end{abstract}
 
 \section{Introduction}
@@ -126,11 +131,15 @@ because doing so needs ground-truth rules, which real datasets rarely provide.
   certainty-factor expert system, four classical learners, an MLP, a semantic-loss
   model, and \nexs{}, measuring accuracy, calibration, rule recovery, logic
   fidelity, data efficiency, shift robustness, and latency.
-  \item We show that \nexs{} recovers more ground-truth rules and is more
-  logic-faithful than any other learned model, matches the MLP on accuracy, and is
-  strongest in low-data regimes, while the discrete expert system is the most
-  logic-faithful and shift-robust but the \emph{worst} calibrated predictor
-  (Section~\ref{sec:results}).
+  \item We show that \nexs{} is more logic-faithful than any other learned model,
+  matches the MLP on accuracy, and is strongest in low-data regimes, while the
+  discrete expert system is the most logic-faithful and shift-robust but the
+  \emph{worst} calibrated predictor (Section~\ref{sec:results}).
+  \item We separate rule \emph{injection} from rule \emph{discovery}: an
+  independent learner recovers the ground-truth rule sets from labels alone on
+  the logical domains, yet the fused model obeys an exactly-correct rule layer on
+  only $63\%$ of the tic-tac-toe domain---accuracy and faithful reasoning are not
+  the same thing (Sections~\ref{sec:results} and~\ref{sec:threats}).
 \end{itemize}
 
 \section{Related Work}
@@ -614,22 +623,38 @@ learner and additionally tracks the true logic, whereas on the clinical datasets
 --- whose KBs are expert approximations, not ground truth --- the gain is not
 reliable.
 
-\paragraph{Does it recover the rules?}
+\paragraph{Does it recover the rules? Two questions, one of which we can answer.}
 The rule-recovery metric used above distils a depth-limited decision tree from
 the model's decisions. That surrogate cannot represent an
 \emph{OR-of-conjunctions}: on tic-tac-toe and MONK-3 it reports rule-F1 $=0$ even
 for the exact expert KB, because the tree emits longer paths than the true
-three-literal rules. We therefore test structural recovery directly, on the
-complete input domain, against the ground-truth rule set (Table~\ref{tab:structural}).
-The \nexs{} rule layer \emph{is} the true rule set on all three logical domains:
-exact set equality holds for every seed (MONK-1, $4$ rules; MONK-3, $7$ rules;
-tic-tac-toe, $8$ rules), with rule precision and recall of $1.0$. This is a
-genuine structural result, and it also shows why the distilled metric was
-misleading. What the fused model does with those rules is a separate question:
-on MONK the fused decisions agree with the true label on $97$--$98\%$ of the
-full domain, but on tic-tac-toe only $63\%$, because the unconstrained neural
-head overrides the rule layer on the many boards far from the training support.
-The rules are recovered; the model does not always obey them.
+three-literal rules. We therefore measure recovery directly on the complete
+input domain.
+
+A first, tempting measurement is circular and we do not use it as evidence.
+\nexs{} initialises its rule layer from the supplied knowledge base
+(\texttt{self.rules = list(domain.expert\_rules)}), so comparing
+\texttt{model.rules} to the ground truth merely recovers the input and shows
+nothing about discovery; it appears in Table~\ref{tab:structural} only as an
+implementation check.
+
+The non-circular question --- can the rules be \emph{discovered} from labels
+alone? --- we answer with a separate candidate-generation (CN2-style) learner
+that is given only the literal membership matrix and the labels, with the
+ground truth hidden (Table~\ref{tab:discovery}). On MONK-1 and MONK-3 it
+recovers the exact ground-truth rule set on every seed (MONK-1, $4$ rules;
+MONK-3, $7$ rules), with precision and recall $1.0$ and full-domain decision
+agreement $1.0$. On tic-tac-toe it recovers all eight winning lines exactly on
+some seeds and otherwise a near-exact superset, at $0.85$ precision/recall and
+$0.95$ full-domain agreement. So the rule \emph{structure} in these domains is
+recoverable from data, which is the constructive half of the claim.
+
+What the fused \nexs{} model does with those rules is a separate question, and
+the answer is more sobering. Even when the rule layer is exactly correct, the
+fused decisions agree with the true label on $97$--$98\%$ of the MONK domain but
+only $63\%$ of tic-tac-toe, because the unconstrained neural head overrides the
+rule layer on boards far from the training support. The rules are discoverable
+and are injected correctly; the fused model does not always obey them.
 
 \paragraph{Functional rule-behaviour probe.}
 To test that the rule layer is not inert, we score a trained tic-tac-toe \nexs{}
@@ -655,6 +680,7 @@ structures, which we discuss in Section~\ref{sec:threats}.
 \input{../figures/table_independent.tex}
 \input{../figures/table_monk.tex}
 \input{../figures/table_structural.tex}
+\input{../figures/table_discovery.tex}
 \input{../figures/table_behavior.tex}
 
 \section{Discussion}
@@ -693,16 +719,25 @@ the significant accuracy advantage of \nexs{} over the MLP largely vanishes, and
 we make no significant-superiority claim for accuracy on any dataset. The
 defensible claim is parity of accuracy with higher logic fidelity.
 
-\paragraph{Rule recovery is measured two ways, and the common one is broken.}
+\paragraph{Rule recovery is measured three ways, and two of them are weak.}
 Distilling a depth-limited decision tree cannot represent an OR-of-conjunctions:
 it assigns rule-F1 $=0$ even to the exact expert KB on tic-tac-toe and MONK-3, so
 the distilled ``rule recovery'' column in Tables~\ref{tab:main}
 and~\ref{tab:realmain} should be read as a weak lower bound, not as evidence
-about the model. The direct structural test (Table~\ref{tab:structural}), which
-compares the model's own rule layer with the ground-truth rule set on the full
-input domain, is the sound measurement, and on it \nexs{} recovers the true rules
-exactly. That test is only available where the ground truth is published
-(tic-tac-toe, MONK-1, MONK-3); for heart and pima no such truth exists.
+about the model.
+
+A second measurement is circular and we flag it explicitly: \nexs{} builds its
+rule layer from the supplied knowledge base, so any comparison of that layer to
+the ground truth is guaranteed to succeed and is evidence of implementation, not
+of discovery. We report it (Table~\ref{tab:structural}) only as a check that the
+layer exposes what it was given.
+
+The sound discovery measurement (Table~\ref{tab:discovery}) uses an independent
+candidate-generation learner trained on labels alone, and it recovers the exact
+rule sets on MONK-1 and MONK-3 and a near-exact set on tic-tac-toe. Discovery is
+therefore demonstrated on logical domains with published ground truth; it is
+\emph{not} demonstrated for heart and pima, where no ground truth exists and the
+expert KB is an approximation rather than the data-generating process.
 
 \paragraph{The rules are recovered but not always obeyed.}
 Structural recovery does not imply the fused model follows the rules: on

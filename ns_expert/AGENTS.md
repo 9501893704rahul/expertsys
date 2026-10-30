@@ -55,7 +55,7 @@ New scripts:
   seed-resampled McNemar (pseudo-replicated), out-of-fold McNemar (each row
   predicted exactly once; the trustworthy one), and StratifiedGroupKFold folds.
 * `experiments/structural_recovery.py` — enumerates the full input domain
-  (3^9 boards; the 288 MONK tuples) and compares the model's OWN rule layer with
+  (3^9 boards; the 432 MONK tuples) and compares the model's OWN rule layer with
   the ground-truth rule set, plus oracle/MLP decision agreement on that domain.
 * `src/real_data.py` — added MONK-1/MONK-3 (loader, exact KBs, ground_truth_rules).
 
@@ -71,8 +71,34 @@ Load-bearing findings (these changed the paper's claims):
   the full ttt domain (neural head overrides off-support); MONK is 97-98%.
 * MONK KBs verified against the published formulas: MONK-1 100%, MONK-3 ~98%
   (the gap is the documented 5% class noise). Note: MONK file column order is
-  class,a1..a6,Id; the input space is 2*3*3*2*4*2=288 tuples, not 432 rows.
+  class,a1..a6,Id; the input space is 3*3*2*3*4*2=432 tuples.
 
-Tests added: monk_kb_is_exact, full_monk_domain_labels, structural_recovery_exact,
-tree_metric_cannot_represent_or_of_conjunctions. All pass.
-Paper: 26 pages, 0 errors, 0 undefined refs.
+## Rigor round 3 (2026-10-30): non-circular rule discovery
+
+Critique: comparing NEXS's rule layer to the ground truth is CIRCULAR because
+`models.py` injects it (`self.rules = list(domain.expert_rules)`). Correct.
+
+* `experiments/rule_discovery.py` — genuine, non-circular discovery. A
+  candidate-generation (CN2-style) learner gets only literal memberships + labels
+  (no expert rules) and its discovered DNF is compared to the hidden ground truth
+  by exact set equality and scored on the full domain.
+  Result: exact recovery on MONK-1 (4 rules) and MONK-3 (7 rules), P=R=1.0,
+  full-domain agreement 1.0; tic-tac-toe 0.85 P/R, 0.95 agreement (exact on some
+  seeds). Also contains `DiscoveryLayer`, a differentiable structure-free rule
+  layer, kept as a (weaker, local-optima-prone) comparison.
+* Two real bugs found while building this and fixed in BOTH scripts:
+  (1) MONK attribute ranges were wrong (a1..a6 = 3,3,2,3,4,2 -> 432 tuples, not
+      288); fixed in `structural_recovery.MONK_RANGES` and `rule_discovery`.
+  (2) Membership literals are defined in RAW units, so the normalised frames must
+      be inverted using the SAME per-seed bounds load_real used
+      (`_train_split_bounds`), not min/max of the already-normalised frame.
+* `structural_recovery.py` now labels its injected-KB comparison as an
+  implementation check and reports the discovery metrics alongside.
+* Paper: abstract, contributions, results ("two questions, one of which we can
+  answer"), and threats rewritten to distinguish injection from discovery; new
+  Table tab:discovery.
+* README updated. New tables: figures/table_discovery.tex.
+
+Tests added: injected_rule_layer_mirrors_kb (renamed from structural_recovery_exact),
+genuine_rule_discovery_from_data. full_monk_domain_labels now expects 432.
+All pass. Paper: 26 pages, 0 errors, 0 undefined refs.

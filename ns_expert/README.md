@@ -104,8 +104,12 @@ Three follow-up checks strengthen and *qualify* the significance result above:
 PYTHONPATH=. python experiments/paired_validation.py --datasets heart pima ttt \
     --seeds 0 1 2 3 4 5 6 7 8 9 --folds 5
 
-# 2. Structural rule recovery against ground truth on the full input domain
+# 2. Logic fidelity on the full input domain + genuine (non-circular) discovery
 PYTHONPATH=. python experiments/structural_recovery.py --datasets ttt monk1 monk3 \
+    --seeds 0 1 2 3 4
+
+# 2b. Rule discovery from labels alone (no expert rules supplied)
+PYTHONPATH=. python experiments/rule_discovery.py --datasets ttt monk1 monk3 \
     --seeds 0 1 2 3 4
 
 # 3. Second rule-governed benchmark (MONK-1 / MONK-3, published formulas)
@@ -120,11 +124,19 @@ Key results:
   pseudo-replicates. Under a clean out-of-fold protocol the gap largely
   disappears (heart p=1.00, pima p=0.15, ttt p=0.25). We therefore claim
   *parity of accuracy with higher logic fidelity*, not significant superiority.
-* **Structural rule recovery is exact.** NEXS's rule layer equals the
-  ground-truth rule set on tic-tac-toe (8 lines), MONK-1 (4 rules) and MONK-3
-  (7 rules), with precision and recall 1.0. The distilled-tree metric used
-  earlier cannot represent an OR-of-conjunctions and reports F1=0 even for the
-  exact KB; the structural test is the sound measurement.
+* **Rule recovery must not be measured against an injected KB.** NEXS builds its
+  rule layer from `domain.expert_rules`, so comparing that layer to the ground
+  truth is circular and only checks the implementation. Genuine discovery is
+  measured by `experiments/rule_discovery.py`, an independent CN2-style learner
+  given labels alone: it recovers the *exact* ground-truth rule sets on MONK-1
+  (4 rules) and MONK-3 (7 rules) with precision/recall 1.0, and a near-exact set
+  on tic-tac-toe (0.85 P/R, 0.95 full-domain agreement). The distilled-tree
+  metric used earlier cannot represent an OR-of-conjunctions and reports F1=0
+  even for the exact KB.
+* **A correct rule layer is not obeyed everywhere.** With an exactly-correct KB,
+  the fused model agrees with the true label on ~98% of the MONK domain but only
+  63% of tic-tac-toe, because the neural head overrides the rule layer off the
+  training support. Held-out accuracy and faithful reasoning are different things.
 * **Generalisation.** On MONK-1 NEXS/semantic-loss/MLP all reach 100%; on the
   noisy MONK-3 NEXS reaches 0.977 with logic fidelity 0.971, comparable to the
   best baselines. Rules are recovered, but the fused model obeys them on only

@@ -236,8 +236,8 @@ def test_full_monk_domain_labels():
     from experiments.structural_recovery import full_monk_domain
     for v, acc_lo in ((1, 1.0), (3, 1.0)):
         Xd, yd = full_monk_domain(v)
-        # 2*3*3*2*4*2 = 288 distinct attribute tuples
-        check(f"monk{v} full domain has 288 instances", len(yd) == 288)
+        # attribute domains per the UCI codebook: 3*3*2*3*4*2 = 432 tuples
+        check(f"monk{v} full domain has 432 instances", len(yd) == 432)
         a1, a2, a3, a4, a5 = (Xd[c].to_numpy() for c in
                               ["a1", "a2", "a3", "a4", "a5"])
         if v == 1:
@@ -248,8 +248,12 @@ def test_full_monk_domain_labels():
               float((ref == yd).mean()) >= acc_lo)
 
 
-def test_structural_recovery_exact():
-    """NEXS's rule layer must equal the ground-truth rules on a logical domain."""
+def test_injected_rule_layer_mirrors_kb():
+    """NEXS's rule layer is injected from the KB, so it must mirror it exactly.
+
+    This is an *implementation* check, not evidence of discovery: the layer is
+    initialised from ``domain.expert_rules``.
+    """
     from src import real_data, models
     name = "monk1"
     domain, tr, va, te = real_data.load_real(name, seed=0)
@@ -259,7 +263,23 @@ def test_structural_recovery_exact():
                for r in m.rules if r.head == domain.label}
     true = {frozenset(str(l) for l in r.body)
             for r in domain.expert_rules if r.head == domain.label}
-    check("NEXS rule layer == true MONK-1 rules", learned == true)
+    check("NEXS injected rule layer == supplied KB", learned == true)
+
+
+def test_genuine_rule_discovery_from_data():
+    """Rules learned from labels alone must equal the hidden ground truth.
+
+    Unlike the injected layer, the candidate-generation learner sees no expert
+    rules.  This is the non-circular test of structural recovery.
+    """
+    from experiments.rule_discovery import discover_rules_only
+    for name, n_true in (("ttt", 8), ("monk1", 4), ("monk3", 7)):
+        r = discover_rules_only(name, seed=0)
+        check(f"{name}: discovered rule set is exact", r["discovered_exact_match"] == 1)
+        check(f"{name}: discovered rule count == {n_true}",
+              r["discovered_rules"] == n_true)
+        check(f"{name}: full-domain agreement >= 0.9",
+              r["discovered_agreement"] >= 0.9)
 
 
 def test_tree_metric_cannot_represent_or_of_conjunctions():
@@ -297,7 +317,8 @@ def main():
     test_paired_statistics_schema()
     test_monk_kb_is_exact()
     test_full_monk_domain_labels()
-    test_structural_recovery_exact()
+    test_injected_rule_layer_mirrors_kb()
+    test_genuine_rule_discovery_from_data()
     test_tree_metric_cannot_represent_or_of_conjunctions()
     print("\nall tests passed")
 
