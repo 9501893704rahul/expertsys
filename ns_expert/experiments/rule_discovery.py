@@ -111,16 +111,24 @@ MONK_RANGES = {1: (1, 2, 3), 2: (1, 2, 3), 3: (1, 2),
 
 
 def monk_candidates() -> tuple[list[tuple], callable]:
-    lits = []
-    for j, a in enumerate(MONK_ATTRS, start=1):
-        for v in MONK_RANGES[j]:
-            lits.append((a, "==", float(v)))
+    """Candidate equality literals in *normalised codebook* units.
+
+    The membership function receives already-encoded features (``src.real_data``
+    applies the declared codebook in the loader), so the literals must be
+    expressed on that same scale rather than on the raw 1-4 codes.
+    """
+    lits = real_data.monk_candidate_literals()
     cols = [MONK_ATTRS.index(a) for a, _, _ in lits]
     vals = [v for _, _, v in lits]
 
     def mem(x, cols=cols, vals=vals):
+        # Equality membership must match src.models._membership:
+        #   sigmoid(1 - 2*|x - v| / tau)
+        # The earlier form, sigmoid((1 - 2|x-v|)/tau), kept the membership above
+        # 0.5 for every neighbouring level once the level spacing shrank below
+        # tau, so it fired on values it should have excluded.
         return torch.stack(
-            [torch.sigmoid((1.0 - 2.0 * (x[:, j] - v).abs()) / 0.10)
+            [torch.sigmoid(1.0 - 2.0 * (x[:, j] - v).abs() / 0.10)
              for j, v in zip(cols, vals)], dim=1)
 
     return lits, mem
@@ -143,16 +151,7 @@ def ground_truth_dnf(name: str) -> tuple[list[frozenset], tuple]:
         lines = [frozenset((real_data.TTT_CELLS[i], ">=", 0.75) for i in line)
                  for line in real_data.TTT_LINES]
         return lines, tuple(sorted(real_data.TTT_CELLS))
-    v = int(name[-1])
-    a1, a2, a3, a4, a5, a6 = MONK_ATTRS
-    if v == 1:
-        rules = [frozenset({(a1, "==", float(t)), (a2, "==", float(t))}) for t in (1, 2, 3)]
-        rules.append(frozenset({(a5, "==", 1.0)}))
-    else:
-        rules = [frozenset({(a5, "==", 3.0), (a4, "==", 1.0)})]
-        rules += [frozenset({(a5, "==", float(s)), (a2, "==", float(t))})
-                  for s in (1, 2, 3) for t in (1, 2)]
-    return rules, tuple(MONK_ATTRS)
+    return real_data.monk_truth_dnf(int(name[-1])), tuple(MONK_ATTRS)
 
 
 # --------------------------------------------------------------------------- #
@@ -161,15 +160,10 @@ def ground_truth_dnf(name: str) -> tuple[list[frozenset], tuple]:
 
 
 def _full_domain(name: str):
-    from experiments.structural_recovery import (full_monk_domain, full_ttt_domain)
+    from experiments.structural_recovery import full_ttt_domain
     if name == "ttt":
         return full_ttt_domain()
-    return full_monk_domain(int(name[-1]))
-
-
-def _train_split_bounds(name: str, seed: int):
-    from experiments.structural_recovery import _train_split_bounds as f
-    return f(name, seed)
+    return real_data.monk_full_domain(int(name[-1]))
 
 
 def learn_dnf_cover(M: np.ndarray, y: np.ndarray, max_lits: int = 3,
@@ -227,10 +221,11 @@ def discover_rules_only(name: str, seed: int) -> dict:
     """
     lits, mem_fn = (ttt_candidates() if name == "ttt" else monk_candidates())
     domain, tr, va, te = real_data.load_real(name, seed=seed)
-    lo, hi = _train_split_bounds(name, seed)
-    span = (hi - lo).replace(0, 1.0)
-    M_tr = mem_fn(torch.tensor((tr.X * span + lo).to_numpy(),
-                               dtype=torch.float32)).detach().numpy()
+    # Features are already in the scale the literals are defined on (raw units
+    # for ttt cells, declared-codebook units for MONK), so no inversion is
+    # needed --- the earlier code un-scaled them, which silently mis-placed
+    # every MONK literal once the loader stopped using min-max scaling.
+    M_tr = mem_fn(torch.tensor(tr.X.to_numpy(), dtype=torch.float32)).detach().numpy()
     bodies = learn_dnf_cover(M_tr, tr.y.astype(int))
     disc_set = {frozenset(lits[i] for i in b) for b in bodies}
     gt, _ = ground_truth_dnf(name)
@@ -253,14 +248,11 @@ def discover(name: str, seed: int, epochs: int, n_rules: int) -> dict:
         lits, mem_fn = monk_candidates()
 
     domain, tr, va, te = real_data.load_real(name, seed=seed)
-    # load_real normalises with bounds taken from the raw *training* rows; we
-    # must recover those same bounds to invert the normalisation for membership
-    # literals, which are defined in raw units.
-    lo, hi = _train_split_bounds(name, seed)
-    span = (hi - lo).replace(0, 1.0)
-
+    # Features already live on the scale the literals use (see monk_candidates);
+    # the old un-scaling step assumed per-seed min-max normalisation, which the
+    # discrete datasets no longer use.
     def to_raw(df: pd.DataFrame) -> torch.Tensor:
-        return torch.tensor((df * span + lo).to_numpy(), dtype=torch.float32)
+        return torch.tensor(df.to_numpy(), dtype=torch.float32)
 
     M_tr = mem_fn(to_raw(tr.X)).detach().numpy()
 
@@ -276,13 +268,12 @@ def discover(name: str, seed: int, epochs: int, n_rules: int) -> dict:
     lit_disc = {lits[i] for s in bodies for i in s}
 
     # decision agreement with the true label over the complete domain
-    Xd_raw, yd = _full_domain(name)
-    M_d = mem_fn(torch.tensor(Xd_raw.to_numpy(), dtype=torch.float32)).detach().numpy()
+    Xd_norm, yd = _full_domain(name)
+    M_d = mem_fn(torch.tensor(Xd_norm.to_numpy(), dtype=torch.float32)).detach().numpy()
     pred = _dnf_predict(M_d, bodies)
     agree = float((pred == yd).mean())
 
-    # references on the same full domain
-    Xd_norm = real_data.normalize(Xd_raw, lo, hi)
+    # reference on the same full domain
     nexs_agree = _nexs_full_domain_agreement(name, seed, Xd_norm, yd)
     dec_agree, dec_rules = _differentiable_discovery(name, seed, lits, mem_fn,
                                                      to_raw, M_d, yd, epochs,

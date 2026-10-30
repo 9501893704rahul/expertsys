@@ -234,16 +234,20 @@ def test_monk_kb_is_exact():
 def test_full_monk_domain_labels():
     """The enumerated MONK domain must match the published truth exactly."""
     from experiments.structural_recovery import full_monk_domain
+    from src import real_data
+    z = real_data.MONK_NORM
     for v, acc_lo in ((1, 1.0), (3, 1.0)):
         Xd, yd = full_monk_domain(v)
         # attribute domains per the UCI codebook: 3*3*2*3*4*2 = 432 tuples
         check(f"monk{v} full domain has 432 instances", len(yd) == 432)
         a1, a2, a3, a4, a5 = (Xd[c].to_numpy() for c in
                               ["a1", "a2", "a3", "a4", "a5"])
+        # labels are evaluated on the *normalised* codebook scale
         if v == 1:
-            ref = ((a1 == a2) | (a5 == 1)).astype(int)
+            ref = ((a1 == a2) | (a5 == z["a5"][1])).astype(int)
         else:
-            ref = (((a5 == 3) & (a4 == 1)) | ((a5 != 4) & (a2 != 3))).astype(int)
+            ref = (((a5 == z["a5"][3]) & (a4 == z["a4"][1]))
+                   | ((a5 != z["a5"][4]) & (a2 != z["a2"][3]))).astype(int)
         check(f"monk{v} enumerated labels == published formula",
               float((ref == yd).mean()) >= acc_lo)
 
@@ -387,6 +391,114 @@ def test_corruption_degrades_kb():
     check("corruption level 1 empties KB", n1 == 0)
 
 
+def test_monk_encoding_is_codebook_based():
+    """MONK attributes use the declared codebook, independent of the fold.
+
+    A min-max encoding fitted per fold would collapse or shift levels depending
+    on which values the fold contains; the encoding must instead be a property
+    of the dataset, and every declared level must stay distinct.
+    """
+    from src import real_data
+
+    for v in (1, 3):
+        X, _ = real_data.DATASETS[f"monk{v}"]["loader"]()
+        for c in real_data.MONK_COLS:
+            vals = sorted(set(X[c].tolist()))
+            expected = sorted(set(real_data.MONK_NORM[c].values()))
+            check(f"monk{v}.{c} levels match codebook", vals == expected)
+        # a5 has four levels and must keep four distinct encodings
+        check(f"monk{v}.a5 keeps 4 distinct levels",
+              len(set(X["a5"].tolist())) == 4)
+
+    # encoding must not depend on the training fold
+    seen = set()
+    for f in real_data.make_oof_folds("monk3", n_folds=5, seed=0):
+        seen.add(tuple(sorted(set(f["train"].X["a5"].tolist()))))
+    check("a5 encoding identical across folds", len(seen) == 1)
+
+
+def test_monk_expert_kb_matches_published_truth():
+    """The MONK expert KB must reproduce the published formula exactly."""
+    from src import real_data
+    from experiments.nested_structural import full_domain
+
+    for v in (1, 3):
+        name = f"monk{v}"
+        Xd, yd = full_domain(name)
+        _, yraw = real_data.DATASETS[name]["loader"]()
+        Xraw, _ = real_data.DATASETS[name]["loader"]()
+        dom = real_data.build_domain(name, Xraw.min(), Xraw.max())
+        A = Xd.to_numpy()
+        col = {c: i for i, c in enumerate(dom.features)}
+        pred = np.zeros(len(Xd), dtype=bool)
+        for r in dom.expert_rules:
+            m = np.ones(len(Xd), dtype=bool)
+            for lit in r.body:
+                x = A[:, col[lit.var]]
+                m &= (x >= lit.thr) if lit.op == ">=" else (
+                    (x <= lit.thr) if lit.op == "<=" else
+                    np.isclose(x, lit.thr, atol=1e-6))
+            pred |= m
+        check(f"{name} expert KB == published truth",
+              float((pred.astype(int) == yd).mean()) == 1.0)
+
+
+def test_full_monk_domain_is_432_with_four_a5_levels():
+    """The enumerated domain must be the true input space, not a collapsed grid."""
+    from experiments.nested_structural import full_domain
+
+    for v in (1, 3):
+        Xd, yd = full_domain(f"monk{v}")
+        check(f"monk{v} enumerated domain has 432 points", len(Xd) == 432)
+        check(f"monk{v} enumerated a5 has 4 levels",
+              len(set(Xd["a5"].tolist())) == 4)
+
+
+def test_metrics_are_per_fold_at_fold_threshold():
+    """Per-fold metrics must use each fold's own threshold.
+
+    Folds whose score distributions sit on different scales need different
+    operating points.  Scoring every fold at one global threshold is strictly
+    worse here, so the per-fold aggregation must beat it --- that is the
+    property the corrected harness relies on.
+    """
+    from experiments.run_experiments import _metrics
+
+    rng = np.random.default_rng(0)
+    y = np.concatenate([rng.integers(0, 2, 200), rng.integers(0, 2, 200)])
+    # fold 0 scores near 0.2, fold 1 near 0.8: the optimal cut differs sharply
+    proba = np.concatenate([
+        np.clip(0.2 + 0.15 * (y[:200] - 0.5) + rng.normal(0, 0.05, 200), 0, 1),
+        np.clip(0.8 + 0.15 * (y[200:] - 0.5) + rng.normal(0, 0.05, 200), 0, 1)])
+    te = [np.arange(0, 200), np.arange(200, 400)]
+    thr = [0.2, 0.8]
+    per_fold = [_metrics(y[i], proba[i], thr=t)["acc"] for i, t in zip(te, thr)]
+    agg = float(np.mean(per_fold))
+    global_thr = _metrics(y, proba, thr=0.5)["acc"]
+    check("per-fold thresholds beat one global threshold", agg > global_thr)
+    check("per-fold mean is a valid accuracy", 0.0 <= agg <= 1.0)
+
+
+def test_run_nested_aggregates_per_fold():
+    """run_nested's reported accuracy equals the mean of per-fold accuracies."""
+    from src import models, real_data
+    from experiments import nested_cv
+    from experiments.run_experiments import _metrics
+
+    name = "heart"
+    _, y = real_data.DATASETS[name]["loader"]()
+    df, oof, info, thr_of, fold_of = nested_cv.run_nested(
+        name, n_folds=3, seed=0, epochs=8, patience=4)
+    row = df[df.method == "MLP"].iloc[0]
+    folds = sorted(set(fold_of.tolist()))
+    manual = float(np.mean([
+        _metrics(y[fold_of == f], oof["MLP"][fold_of == f],
+                 thr=thr_of["MLP"][f])["acc"] for f in folds]))
+    check("reported acc == mean of per-fold accuracies",
+          abs(row["acc"] - manual) < 1e-9)
+    check("per-fold thresholds were recorded", len(thr_of["MLP"]) == len(folds))
+
+
 def main():
     test_expert_system_matches_oracle()
     test_rule_extraction_recovers_expert_rules()
@@ -415,6 +527,11 @@ def main():
     test_discovered_rules_are_not_injected()
     test_semantic_rule_equivalence()
     test_corruption_degrades_kb()
+    test_monk_encoding_is_codebook_based()
+    test_monk_expert_kb_matches_published_truth()
+    test_full_monk_domain_is_432_with_four_a5_levels()
+    test_metrics_are_per_fold_at_fold_threshold()
+    test_run_nested_aggregates_per_fold()
     print("\nall tests passed")
 
 

@@ -39,7 +39,15 @@ ROOT = Path(__file__).resolve().parent.parent
 # full discrete domains (for logical equivalence)
 # --------------------------------------------------------------------------- #
 def full_domain(name: str):
-    """Enumerate the complete input domain as a normalized DataFrame + labels."""
+    """Enumerate the complete input domain as a normalized DataFrame + labels.
+
+    The MONK attributes are enumerated over their *declared* codebooks
+    (:data:`real_data.MONK_NORM`) and labelled by the published formula, so the
+    domain is the true 432-point input space rather than a 144-point grid with
+    collapsed levels.  The labels are cross-checked against the observed rows:
+    a mismatch would mean the codebook and the dataset disagree, which would
+    invalidate the structural comparison.
+    """
     if name == "ttt":
         vals = [1.0, 0.0, 0.5]  # x, o, blank
         rows = list(itertools.product(vals, repeat=9))
@@ -49,21 +57,48 @@ def full_domain(name: str):
         for line in real_data.TTT_LINES:
             y |= (A[:, list(line)] == 1.0).all(axis=1).astype(int)
         return X, y
-    # MONK: enumerate the attribute domains in normalized units
+
+    # MONK: full cartesian product of the declared attribute codebooks
     v = int(name[-1])
-    ranges = [[1, 2, 3], [1, 2, 3], [1, 2], [1, 2, 3], [1, 2, 3, 4], [1, 2]]
-    norm = {1: 0.0, 2: 0.5, 3: 1.0, 4: 1.0}
-    combos = list(itertools.product(*ranges))
-    X = pd.DataFrame(combos, columns=real_data.MONK_COLS).astype(float)
-    for c in X.columns:
-        X[c] = X[c].map(norm).astype(float)
-    a1, a2, a3, a4, a5, a6 = (X[c].to_numpy() for c in real_data.MONK_COLS)
-    # in normalized units the codebook values are 1->0.0, 2->0.5, 3->1.0, 4->1.0
-    if v == 1:
-        y = ((a1 == a2) | (a5 == 0.0)).astype(int)
-    else:
-        y = (((a5 == 1.0) & (a4 == 0.0)) | ((a5 != 1.0) & (a2 != 1.0))).astype(int)
+    X, y = real_data.monk_full_domain(v)
+    # MONK-3's training file carries 5% label noise, so a handful of observed
+    # rows legitimately disagree with the clean formula; MONK-1 must be exact.
+    _check_codebook(name, X, y, tol=0.0 if v == 1 else 0.05)
     return X, y
+
+
+def _check_codebook(name: str, X: pd.DataFrame, y: np.ndarray,
+                    tol: float = 0.0) -> None:
+    """Verify the enumerated domain reproduces the observed labels.
+
+    ``tol`` is the fraction of observed rows allowed to disagree, used for
+    MONK-3's documented 5% class noise.  Both sides are keyed through the same
+    rounding, so a formatting mismatch cannot silently skip the comparison.
+    """
+    Xraw, yraw = real_data.DATASETS[name]["loader"]()
+    cols = list(X.columns)
+
+    def key(row) -> str:
+        return "|".join(f"{float(row[c]):.6f}" for c in cols)
+
+    dom = {key(X.iloc[i]): int(y[i]) for i in range(len(X))}
+    n_bad, n_seen = 0, 0
+    for i in range(len(Xraw)):
+        k = key(Xraw.iloc[i])
+        if k in dom:
+            n_seen += 1
+            if dom[k] != int(yraw[i]):
+                n_bad += 1
+    if n_seen == 0:
+        raise AssertionError(
+            f"{name}: enumerated domain matched none of the observed rows --- "
+            f"encoding mismatch between the loader and the domain grid")
+    frac = n_bad / n_seen
+    if frac > tol + 1e-9:
+        raise AssertionError(
+            f"{name}: enumerated ground truth disagrees with the dataset on "
+            f"{n_bad} of {n_seen} observed rows ({frac:.1%} > tol {tol:.1%}) "
+            f"--- codebook or formula is wrong")
 
 
 def truth_literals(name: str) -> list[frozenset]:
@@ -71,18 +106,7 @@ def truth_literals(name: str) -> list[frozenset]:
     if name == "ttt":
         return [frozenset((real_data.TTT_CELLS[i], ">=", 0.75) for i in line)
                 for line in real_data.TTT_LINES]
-    v = int(name[-1])
-    a1, a2, a3, a4, a5, a6 = real_data.MONK_COLS
-    norm = {1: 0.0, 2: 0.5, 3: 1.0}
-    if v == 1:
-        rules = [frozenset({(a1, "==", norm[t]), (a2, "==", norm[t])})
-                 for t in (1, 2, 3)]
-        rules.append(frozenset({(a5, "==", norm[1])}))
-        return rules
-    rules = [frozenset({(a5, "==", norm[3]), (a4, "==", norm[1])})]
-    rules += [frozenset({(a5, "==", norm[s]), (a2, "==", norm[t])})
-              for s in (1, 2, 3) for t in (1, 2)]
-    return rules
+    return real_data.monk_truth_dnf(int(name[-1]))
 
 
 def _canon(rule) -> frozenset:

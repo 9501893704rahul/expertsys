@@ -102,3 +102,48 @@ Critique: comparing NEXS's rule layer to the ground truth is CIRCULAR because
 Tests added: injected_rule_layer_mirrors_kb (renamed from structural_recovery_exact),
 genuine_rule_discovery_from_data. full_monk_domain_labels now expects 432.
 All pass. Paper: 26 pages, 0 errors, 0 undefined refs.
+
+## Phase 1 (2026-10-30): corrected nested protocol
+
+An audit of the nested-CV harness against the actual code found four real defects
+(plus one latent) that the earlier write-up did not reflect. All are fixed.
+
+1. **Fold-specific threshold selection.** `nested_cv.run_nested` used to pool all
+   out-of-fold probabilities and apply one *averaged* threshold, so one fold's
+   operating point decided another fold's labels. Now each fold keeps its own
+   threshold (`thr_min`/`thr_max` in `nested_cv_metrics.csv` show the real
+   spread, e.g. LogReg on MONK-1 0.33-0.62), metrics are computed per fold and
+   averaged, and `nested_cv_oof_proba.csv` records `fold` + `threshold` per row so
+   `yhat` uses the row's own fold threshold.
+2. **Inner cross-validation.** The old `_tune` used a single validation block.
+   Replaced by `_inner_cv`: 3-fold stratified CV over the outer *training* rows
+   only, hyperparameters chosen by mean inner AUC, threshold from the F1-optimal
+   cut of the pooled inner predictions.
+3. **MONK categorical encoding.** MONK attributes are categorical; per-fold
+   min-max scaling drifted the encoding with the fold and collapsed `a5=3`/`a5=4`
+   onto one value. The loader now maps every level through a *declared* codebook
+   (`MONK_NORM`, `(j-1)/(k-1)`), independent of the fold. `DATASETS[name]
+   ["preprocess"]` selects `none` for ttt/monk1/monk3 and `minmax` elsewhere;
+   `Preprocessor` gained `scale="none"`.
+4. **Train-only preprocessing** verified explicitly: imputation medians and
+   scaling bounds equal the outer-training statistics (not full-dataset ones),
+   folds are disjoint, every row is tested exactly once.
+5. **Latent bug (found while fixing 3).** `rule_discovery.monk_candidates` used
+   `sigmoid((1 - 2|x-v|)/tau)` instead of `src.models`'
+   `sigmoid(1 - 2|x-v|/tau)`, which fires on neighbouring levels once the spacing
+   drops below `tau`; and both legacy scripts un-scaled features with
+   `_train_split_bounds`, invalid once MONK stopped being min-max scaled. Fixed;
+   MONK-1/3/ttt now recover exactly across seeds.
+
+Single source of truth: `src.real_data.monk_full_domain` / `monk_truth_dnf` /
+`monk_candidate_literals`; `nested_structural.full_domain`, `structural_recovery
+.full_monk_domain` and `rule_discovery._full_domain` all delegate to them.
+`_check_codebook` cross-checks the enumerated grid against the observed rows
+(tol 0 for MONK-1, 5% for MONK-3's documented label noise).
+
+Corrected nested results (5 folds, seed 0, `results/nested_cv`): NEXS-Expert is
+1.000 on ttt/MONK-1 and 0.989 on MONK-3; the significant paired wins are all on
+exact-rule or corrupted-KB comparisons (ttt, MONK-1, MONK-3, pima-vs-GB); the
+clinical MLP comparisons remain non-significant. Structural: MONK-3 full-domain
+equivalence rose 0.665 -> 0.998 (the extra rules are harmless refinements, set
+F1 still 0.393). Tests: 98 pass.

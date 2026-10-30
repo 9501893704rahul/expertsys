@@ -28,7 +28,10 @@ class Preprocessor:
     ----------
     scale:
         ``"minmax"`` (default) maps each feature to ``[0, 1]`` using training
-        bounds; ``"standard"`` standardises with training mean/std.
+        bounds; ``"standard"`` standardises with training mean/std; ``"none"``
+        leaves values untouched (used by datasets whose loader already emits the
+        canonical scale, such as the discrete MONK / tic-tac-toe encodings, so
+        the encoding cannot drift with the training fold).
     select:
         ``None`` keeps all features; an int keeps the top-``k`` features by
         training-set association with the label; ``"corr"`` drops features whose
@@ -66,6 +69,10 @@ class Preprocessor:
             self.lo_, self.hi_ = Xf.min(), Xf.max()
         elif self.scale == "standard":
             self.mean_, self.std_ = Xf.mean(), Xf.std(ddof=0).replace(0, 1.0)
+        elif self.scale == "none":
+            # canonical scale already supplied by the loader; identity transform
+            self.lo_ = pd.Series(0.0, index=Xf.columns)
+            self.hi_ = pd.Series(1.0, index=Xf.columns)
         else:
             raise ValueError(f"unknown scale {self.scale!r}")
 
@@ -74,6 +81,8 @@ class Preprocessor:
             span = (self.hi_ - self.lo_).replace(0, 1.0)
             Z = (Xf - self.lo_) / span
             return Z.clip(*self.clip)
+        if self.scale == "none":
+            return Xf.copy()
         Z = (Xf - self.mean_) / self.std_
         return Z
 

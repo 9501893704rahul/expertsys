@@ -6,36 +6,36 @@
 \toprule
 Dataset & Comparison & $\Delta$ & CI$_{95}$ & $p$ & $p_{\mathrm{Holm}}$ & Sig. \\
 \midrule
-heart & NEXS\_Expert $-$ MLP & +0.000 & [-0.030, +0.030] & 1.000 & 1.000 & -- \\
-heart & NEXS\_Discovered $-$ MLP & +0.017 & [-0.026, +0.056] & 0.533 & 1.000 & -- \\
-heart & NEXS\_Expert $-$ NEXS\_Discovered & -0.017 & [-0.056, +0.023] & 0.522 & 1.000 & -- \\
-heart & NEXS\_Expert $-$ NEXS\_Corrupt & +0.003 & [-0.023, +0.033] & 1.000 & 1.000 & -- \\
-heart & NEXS\_Expert $-$ GradientBoosting & +0.003 & [-0.043, +0.050] & 1.000 & 1.000 & -- \\
-pima & NEXS\_Expert $-$ MLP & -0.012 & [-0.029, +0.005] & 0.211 & 1.000 & -- \\
-pima & NEXS\_Discovered $-$ MLP & -0.004 & [-0.022, +0.014] & 0.775 & 1.000 & -- \\
-pima & NEXS\_Expert $-$ NEXS\_Discovered & -0.008 & [-0.023, +0.008] & 0.418 & 1.000 & -- \\
-pima & NEXS\_Expert $-$ NEXS\_Corrupt & -0.005 & [-0.021, +0.010] & 0.627 & 1.000 & -- \\
-pima & NEXS\_Expert $-$ GradientBoosting & +0.004 & [-0.023, +0.031] & 0.850 & 1.000 & -- \\
-wbc & NEXS\_Expert $-$ MLP & +0.001 & [+0.000, +0.004] & 1.000 & 1.000 & -- \\
-wbc & NEXS\_Discovered $-$ MLP & -0.004 & [-0.011, +0.001] & 0.375 & 1.000 & -- \\
-wbc & NEXS\_Expert $-$ NEXS\_Discovered & +0.006 & [+0.001, +0.011] & 0.125 & 0.500 & -- \\
-wbc & NEXS\_Expert $-$ NEXS\_Corrupt & -0.001 & [-0.007, +0.003] & 1.000 & 1.000 & -- \\
-wbc & NEXS\_Expert $-$ GradientBoosting & +0.014 & [+0.006, +0.024] & 0.006 & 0.032 & \checkmark \\
-ttt & NEXS\_Expert $-$ MLP & +0.006 & [+0.002, +0.011] & 0.031 & 0.094 & -- \\
-ttt & NEXS\_Discovered $-$ MLP & +0.011 & [+0.005, +0.019] & 0.001 & 0.005 & \checkmark \\
-ttt & NEXS\_Expert $-$ NEXS\_Discovered & -0.005 & [-0.010, -0.001] & 0.062 & 0.125 & -- \\
-ttt & NEXS\_Expert $-$ NEXS\_Corrupt & +0.004 & [+0.000, +0.009] & 0.219 & 0.219 & -- \\
-ttt & NEXS\_Expert $-$ GradientBoosting & +0.009 & [+0.003, +0.017] & 0.012 & 0.047 & \checkmark \\
-monk1 & NEXS\_Expert $-$ MLP & -0.013 & [-0.025, -0.002] & 0.065 & 0.327 & -- \\
-monk1 & NEXS\_Discovered $-$ MLP & -0.013 & [-0.025, -0.002] & 0.065 & 0.327 & -- \\
+heart & NEXS\_Expert $-$ MLP & +0.023 & [-0.007, +0.056] & 0.230 & 0.844 & -- \\
+heart & NEXS\_Discovered $-$ MLP & +0.030 & [-0.010, +0.073] & 0.211 & 0.844 & -- \\
+heart & NEXS\_Expert $-$ NEXS\_Discovered & -0.007 & [-0.050, +0.036] & 0.878 & 1.000 & -- \\
+heart & NEXS\_Expert $-$ NEXS\_Corrupt & +0.007 & [-0.023, +0.036] & 0.824 & 1.000 & -- \\
+heart & NEXS\_Expert $-$ GradientBoosting & +0.056 & [+0.010, +0.102] & 0.024 & 0.120 & -- \\
+pima & NEXS\_Expert $-$ MLP & -0.009 & [-0.029, +0.010] & 0.435 & 0.906 & -- \\
+pima & NEXS\_Discovered $-$ MLP & -0.020 & [-0.043, +0.004] & 0.133 & 0.532 & -- \\
+pima & NEXS\_Expert $-$ NEXS\_Discovered & +0.010 & [-0.007, +0.027] & 0.302 & 0.906 & -- \\
+pima & NEXS\_Expert $-$ NEXS\_Corrupt & -0.007 & [-0.020, +0.007] & 0.442 & 0.906 & -- \\
+pima & NEXS\_Expert $-$ GradientBoosting & +0.046 & [+0.013, +0.076] & 0.005 & 0.027 & \checkmark \\
+wbc & NEXS\_Expert $-$ MLP & -0.003 & [-0.010, +0.004] & 0.688 & 1.000 & -- \\
+wbc & NEXS\_Discovered $-$ MLP & -0.006 & [-0.016, +0.004] & 0.388 & 1.000 & -- \\
+wbc & NEXS\_Expert $-$ NEXS\_Discovered & +0.003 & [-0.004, +0.011] & 0.727 & 1.000 & -- \\
+wbc & NEXS\_Expert $-$ NEXS\_Corrupt & -0.004 & [-0.011, +0.003] & 0.453 & 1.000 & -- \\
+wbc & NEXS\_Expert $-$ GradientBoosting & +0.010 & [+0.000, +0.021] & 0.118 & 0.592 & -- \\
+ttt & NEXS\_Expert $-$ MLP & +0.010 & [+0.004, +0.018] & 0.002 & 0.008 & \checkmark \\
+ttt & NEXS\_Discovered $-$ MLP & +0.010 & [+0.004, +0.018] & 0.002 & 0.008 & \checkmark \\
+ttt & NEXS\_Expert $-$ NEXS\_Discovered & +0.000 & [+0.000, +0.000] & 1.000 & 1.000 & -- \\
+ttt & NEXS\_Expert $-$ NEXS\_Corrupt & +0.005 & [+0.001, +0.010] & 0.062 & 0.125 & -- \\
+ttt & NEXS\_Expert $-$ GradientBoosting & +0.016 & [+0.008, +0.024] & 0.000 & 0.000 & \checkmark \\
+monk1 & NEXS\_Expert $-$ MLP & +0.000 & [+0.000, +0.000] & 1.000 & 1.000 & -- \\
+monk1 & NEXS\_Discovered $-$ MLP & +0.000 & [+0.000, +0.000] & 1.000 & 1.000 & -- \\
 monk1 & NEXS\_Expert $-$ NEXS\_Discovered & +0.000 & [+0.000, +0.000] & 1.000 & 1.000 & -- \\
-monk1 & NEXS\_Expert $-$ NEXS\_Corrupt & +0.013 & [-0.005, +0.031] & 0.248 & 0.743 & -- \\
-monk1 & NEXS\_Expert $-$ GradientBoosting & -0.002 & [-0.018, +0.014] & 1.000 & 1.000 & -- \\
-monk3 & NEXS\_Expert $-$ MLP & +0.009 & [+0.000, +0.018] & 0.125 & 0.625 & -- \\
-monk3 & NEXS\_Discovered $-$ MLP & +0.005 & [-0.005, +0.018] & 0.549 & 1.000 & -- \\
-monk3 & NEXS\_Expert $-$ NEXS\_Discovered & +0.004 & [-0.005, +0.013] & 0.688 & 1.000 & -- \\
-monk3 & NEXS\_Expert $-$ NEXS\_Corrupt & +0.005 & [-0.004, +0.014] & 0.453 & 1.000 & -- \\
-monk3 & NEXS\_Expert $-$ GradientBoosting & +0.000 & [-0.007, +0.007] & 1.000 & 1.000 & -- \\
+monk1 & NEXS\_Expert $-$ NEXS\_Corrupt & +0.027 & [+0.014, +0.041] & 0.000 & 0.000 & \checkmark \\
+monk1 & NEXS\_Expert $-$ GradientBoosting & +0.054 & [+0.036, +0.074] & 0.000 & 0.000 & \checkmark \\
+monk3 & NEXS\_Expert $-$ MLP & +0.016 & [+0.007, +0.027] & 0.004 & 0.020 & \checkmark \\
+monk3 & NEXS\_Discovered $-$ MLP & +0.013 & [+0.002, +0.025] & 0.065 & 0.196 & -- \\
+monk3 & NEXS\_Expert $-$ NEXS\_Discovered & +0.004 & [+0.000, +0.009] & 0.500 & 1.000 & -- \\
+monk3 & NEXS\_Expert $-$ NEXS\_Corrupt & +0.013 & [+0.004, +0.023] & 0.016 & 0.062 & -- \\
+monk3 & NEXS\_Expert $-$ GradientBoosting & +0.004 & [+0.000, +0.009] & 0.500 & 1.000 & -- \\
 \bottomrule
 \end{tabular}
 \end{table}

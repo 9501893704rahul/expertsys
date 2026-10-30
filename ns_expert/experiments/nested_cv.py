@@ -5,9 +5,14 @@ Methodological contract
 * **Outer loop** = 5 stratified folds.  Each row falls in the test block of
   exactly one fold, so every observation is predicted exactly once.  Test rows
   are never reused, so seed-level pseudo-replication cannot occur.
-* **Inner loop** = a validation block carved from the outer *training* rows
-  only, used for hyperparameter search, early stopping, and threshold selection.
-  The test block never influences any of those choices.
+* **Inner loop** = 3-fold cross-validation over the outer *training* rows only,
+  used for hyperparameter search and threshold selection.  The threshold comes
+  from the pooled inner-fold predictions; the outer test block never influences
+  the choice.
+* **Per-fold operating points.**  Each fold carries its own threshold, and a
+  row's label is decided at *its own fold's* threshold.  Metrics are computed
+  per fold and averaged, so one fold's operating point never decides another
+  fold's labels.
 * **Preprocessing** (imputation, scaling, feature selection) is fit on the outer
   training rows only (see :mod:`src.pipeline`).
 * **Rule discovery** for ``NEXS_Discovered`` runs on the outer training rows
@@ -84,42 +89,52 @@ def build_methods(seed: int) -> dict:
     }
 
 
-def _tune(cfg, domain, tr, va, seed, epochs, patience):
-    """Inner-loop search over NEXS hyperparameters; fixed config otherwise."""
+def _inner_cv(cfg, domain, tr, seed, epochs, patience, n_inner=3):
+    """Inner cross-validation over the outer *training* rows.
+
+    Returns ``(best_hp, threshold)``.  Every inner fold holds out its own
+    validation block from the training rows, so the hyperparameter choice and
+    the decision threshold are both estimated without touching the outer test
+    block.  The threshold comes from the *pooled* inner-fold predictions, which
+    is why it is a genuine training-side estimate rather than a value read off
+    the test rows.
+
+    A single inner split (as the earlier version used) makes the choice depend
+    on one arbitrary partition; averaging AUC over ``n_inner`` folds is the
+    standard nested-CV design and is much less noisy.
+    """
     from sklearn.metrics import roc_auc_score
+    from sklearn.model_selection import StratifiedKFold
 
     from experiments.run_experiments import _best_threshold
 
     grid = NEXS_GRID if cfg["torch"] else [{}]
-    best, best_auc, best_hp = None, -np.inf, {}
+    Xtr, ytr = tr.X.to_numpy(), np.asarray(tr.y)
+    skf = StratifiedKFold(n_splits=n_inner, shuffle=True, random_state=seed)
+    splits = list(skf.split(Xtr, ytr))
+
+    scored = []
     for hp in grid:
-        m = cfg["make"](domain, hp)
-        if hasattr(m, "kw"):
-            m.kw.update(epochs=epochs, patience=patience, seed=seed)
-        m.fit(tr.X.to_numpy(), tr.y, va.X.to_numpy(), va.y)
-        p = m.predict_proba(va.X.to_numpy())
-        auc = roc_auc_score(va.y, p) if len(np.unique(va.y)) > 1 else 0.5
-        if auc > best_auc:
-            best, best_auc, best_hp = m, float(auc), hp
-    thr = _best_threshold(best.predict_proba(va.X.to_numpy()), va.y, metric="f1")
-    return best, best_hp, float(thr)
+        pooled = np.full(len(ytr), np.nan)
+        for k, (itr, iva) in enumerate(splits):
+            m = cfg["make"](domain, hp)
+            if hasattr(m, "kw"):
+                m.kw.update(epochs=epochs, patience=patience, seed=seed + k)
+            m.fit(Xtr[itr], ytr[itr], Xtr[iva], ytr[iva])
+            pooled[iva] = m.predict_proba(Xtr[iva])
+        assert not np.isnan(pooled).any()
+        auc = roc_auc_score(ytr, pooled) if len(np.unique(ytr)) > 1 else 0.5
+        thr = _best_threshold(pooled, ytr, metric="f1")
+        scored.append((float(auc), hp, float(thr)))
 
-
-def _degrade(domain, level, seed, kind="corrupt"):
-    from dataclasses import replace
-
-    rules = domain.expert_rules
-    if kind == "incomplete":
-        rules = discovery.incomplete_rules(rules, 1.0 - level, seed=seed)
-    else:
-        rules = discovery.corrupt_rules(rules, level, seed=seed)
-    return replace(domain, expert_rules=tuple(rules),
-                   meta={**domain.meta, "kb_source": f"{kind}:{level}"})
+    scored.sort(key=lambda r: r[0], reverse=True)
+    _, best_hp, best_thr = scored[0]
+    return best_hp, best_thr
 
 
 def run_nested(name: str, n_folds: int, seed: int, epochs: int, patience: int,
                corrupt_level: float = 0.4) -> tuple[pd.DataFrame, dict, list]:
-    """Nested CV for one dataset; returns (metrics, oof, fold_info)."""
+    """Nested CV for one dataset; returns (metrics, oof, fold_info, per-fold data)."""
     from experiments.run_experiments import _metrics
 
     _, y = real_data.DATASETS[name]["loader"]()
@@ -128,11 +143,15 @@ def run_nested(name: str, n_folds: int, seed: int, epochs: int, patience: int,
     oof = {m: np.full(n, np.nan) for m in methods}
     thr_of = {m: [] for m in methods}
     hp_of = {m: [] for m in methods}
+    fold_of = np.full(n, -1, dtype=int)
+    fold_te = []
     fold_info = []
 
     for f in real_data.make_oof_folds(name, n_folds=n_folds, seed=seed):
         fold, domain = f["fold"], f["domain"]
         tr, va, te, te_i = f["train"], f["val"], f["test"], f["te_i"]
+        fold_of[te_i] = fold
+        fold_te.append(te_i)
 
         disc_rules = discovery.discover_rules(domain, tr.X, tr.y)
         dom_disc = discovery.with_discovered_rules(domain, disc_rules)
@@ -147,21 +166,44 @@ def run_nested(name: str, n_folds: int, seed: int, epochs: int, patience: int,
         for mname, cfg in methods.items():
             d = {"NEXS_Discovered": dom_disc, "NEXS_Corrupt": dom_corr}.get(
                 mname, domain)
-            m, hp, thr = _tune(cfg, d, tr, va, seed + fold, epochs, patience)
+            hp, thr = _inner_cv(cfg, d, tr, seed + fold, epochs, patience)
+            m = cfg["make"](d, hp)
+            if hasattr(m, "kw"):
+                m.kw.update(epochs=epochs, patience=patience, seed=seed + fold)
+            m.fit(tr.X.to_numpy(), tr.y, va.X.to_numpy(), va.y)
             oof[mname][te_i] = m.predict_proba(te.X.to_numpy())
             thr_of[mname].append(thr)
             hp_of[mname].append(hp)
 
+    # Metrics are computed *per fold at that fold's own threshold*, then averaged.
+    # Pooling all rows and applying one global threshold would let one fold's
+    # operating point decide another fold's labels.
     rows = []
     for mname in oof:
         proba = oof[mname]
         assert not np.isnan(proba).any(), f"{mname}: incomplete OOF coverage"
-        thr = float(np.mean(thr_of[mname]))
-        m = _metrics(y, proba, thr=thr)
+        per_fold = [_metrics(y[te_i], proba[te_i], thr=thr_of[mname][k])
+                    for k, te_i in enumerate(fold_te)]
+        agg = {k: float(np.mean([m[k] for m in per_fold]))
+               for k in ("acc", "f1", "auc", "brier", "ece")}
         rows.append(dict(dataset=name, method=mname, seed=seed, n=n,
-                         threshold=thr, hp=str(hp_of[mname][0]),
-                         **{k: float(v) for k, v in m.items()}))
-    return pd.DataFrame(rows), oof, fold_info, thr_of
+                         threshold=float(np.mean(thr_of[mname])),
+                         thr_min=float(np.min(thr_of[mname])),
+                         thr_max=float(np.max(thr_of[mname])),
+                         hp=str(hp_of[mname][0]), **agg))
+    return pd.DataFrame(rows), oof, fold_info, thr_of, fold_of
+
+
+def _degrade(domain, level, seed, kind="corrupt"):
+    from dataclasses import replace
+
+    rules = domain.expert_rules
+    if kind == "incomplete":
+        rules = discovery.incomplete_rules(rules, 1.0 - level, seed=seed)
+    else:
+        rules = discovery.corrupt_rules(rules, level, seed=seed)
+    return replace(domain, expert_rules=tuple(rules),
+                   meta={**domain.meta, "kb_source": f"{kind}:{level}"})
 
 
 def main() -> None:
@@ -183,18 +225,20 @@ def main() -> None:
         for seed in args.seeds:
             print(f"== nested CV {name} seed={seed} ==", flush=True)
             t0 = time.time()
-            df, oof, info, thr_of = run_nested(name, args.folds, seed,
-                                               args.epochs, args.patience,
-                                               args.corrupt_level)
+            df, oof, info, thr_of, fold_of = run_nested(
+                name, args.folds, seed, args.epochs, args.patience,
+                args.corrupt_level)
             df["seconds"] = time.time() - t0
             metrics.append(df)
             folds += info
-            thr_by_method = {m: float(np.mean(thr_of[m])) for m in oof}
             for mname, proba in oof.items():
-                thr = thr_by_method[mname]
                 for i, p in enumerate(proba):
+                    # yhat uses *this row's own fold* threshold, never another
+                    # fold's operating point
+                    thr = thr_of[mname][fold_of[i]]
                     oof_rows.append(dict(dataset=name, seed=seed, method=mname,
-                                         row=i, proba=float(p),
+                                         row=i, fold=int(fold_of[i]),
+                                         threshold=float(thr), proba=float(p),
                                          yhat=int(p >= thr)))
     metrics = pd.concat(metrics, ignore_index=True)
     metrics.to_csv(out / "nested_cv_metrics.csv", index=False)

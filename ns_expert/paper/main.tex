@@ -56,9 +56,10 @@ random forest. We also find that a classical certainty-factor expert system,
 despite being the most logic-faithful and shift-robust predictor, is the
 \emph{worst} calibrated (ECE ${\sim}0.09$), because its certainty factors are
 heuristics rather than probabilities; isotonic calibration makes all learned
-models well calibrated. Finally, we repeat the study on three small public
-datasets---UCI Cleveland heart disease, Pima diabetes, and tic-tac-toe---with
-hand-written knowledge bases. There the expert system is exact only when its
+models well calibrated. Finally, we repeat the study on small public
+datasets---UCI Cleveland heart disease, Pima diabetes, tic-tac-toe, the Wisconsin
+breast-cancer cytology data, and MONK-1/3---with hand-written knowledge bases.
+There the expert system is exact only when its
 knowledge is exact (tic-tac-toe, where it is the eight winning lines) and is the
 \emph{weakest} learned-comparable method when the knowledge is approximate; with
 class weighting \nexs{} is the most accurate model on heart ($0.836$) and the
@@ -81,7 +82,7 @@ evidence of discovery, whereas an independent learner trained on labels alone
 recovers the exact ground-truth rule sets on MONK-1 and MONK-3 (precision and
 recall $1.0$) and a near-exact set on tic-tac-toe. Crucially, a correct rule
 layer is not obeyed everywhere: even with the exact rules, the fused model agrees
-with the true label on $97$--$98\%$ of the MONK domain but only $63\%$ of
+with the true label on $96$--$98\%$ of the MONK domain but only $63\%$ of
 tic-tac-toe. We then re-evaluate the whole study under a stricter protocol that
 removes two methodological flaws present in the exploratory analysis: data
 leakage (imputation, scaling and feature selection are now fitted on training
@@ -317,11 +318,17 @@ values in place so that imputation is a fitted transformation.
 \paragraph{Nested cross-validation.}
 The outer loop is $5$ stratified folds; each row falls in the test block of
 exactly one fold, so every observation is predicted exactly once out-of-fold.
-The inner loop is a validation block carved from the outer \emph{training} rows
+The inner loop is a $3$-fold cross-validation over the outer \emph{training} rows
 only, and it is used for hyperparameter search, early stopping and decision
-threshold selection. The test block never influences any of those choices. Rule
-discovery for the \emph{discovered-KB} configuration also runs on the outer
-training rows only, so the discovered knowledge never sees the test block.
+threshold selection. Hyperparameters are chosen by mean inner-fold AUC and the
+threshold by the F1-optimal cut of the \emph{pooled} inner-fold predictions, so
+the test block never influences either choice. Each outer fold then carries its
+own operating point: a row is labelled at \emph{its own fold's} threshold and
+metrics are computed per fold and averaged, rather than scoring every fold at one
+pooled threshold (which would let one fold's operating point decide another
+fold's labels). Rule discovery for the \emph{discovered-KB} configuration also
+runs on the outer training rows only, so the discovered knowledge never sees the
+test block.
 
 \paragraph{Independent statistics.}
 Comparisons use the pooled out-of-fold predictions, so the unit of observation is
@@ -475,7 +482,7 @@ interpretability and logic fidelity.
 \section{Real-Data Evaluation}
 \label{sec:real}
 Synthetic data give us ground-truth rules but not realism, so we repeat the study
-on three small, standard, public datasets with hand-written expert knowledge
+on four small, standard, public datasets with hand-written expert knowledge
 bases. The datasets are chosen to cover the regimes that matter.
 
 \begin{itemize}
@@ -714,7 +721,7 @@ recoverable from data, which is the constructive half of the claim.
 
 What the fused \nexs{} model does with those rules is a separate question, and
 the answer is more sobering. Even when the rule layer is exactly correct, the
-fused decisions agree with the true label on $97$--$98\%$ of the MONK domain but
+fused decisions agree with the true label on $96$--$98\%$ of the MONK domain but
 only $63\%$ of tic-tac-toe, because the unconstrained neural head overrides the
 rule layer on boards far from the training support. The rules are discoverable
 and are injected correctly; the fused model does not always obey them.
@@ -778,37 +785,45 @@ Table~\ref{tab:nested-main} gives accuracy, F1 and AUC for every method on all s
 datasets. Three points stand out, and two of them are negative results for \nexs{}.
 
 \begin{enumerate}
-  \item \textbf{On the two approximate-knowledge datasets, the rule layer does not
-  help.} On heart, \nexs{} with the expert KB attains $0.792$ accuracy, identical
-  to the plain MLP ($0.792$) and below the random forest ($0.828$). On pima,
-  \nexs{} is at $0.742$ versus MLP $0.754$ and random forest $0.759$. The
+  \item \textbf{On the two approximate-knowledge datasets, the rule layer gives no
+  reliable gain.} On heart, \nexs{} with the expert KB attains $0.822$ accuracy,
+  above the plain MLP ($0.799$) but below the random forest ($0.835$); the
+  \nexs{}--MLP gap ($+0.023$) is not significant ($p_{\mathrm{Holm}}=0.84$). On
+  pima, \nexs{} is at $0.741$ versus MLP $0.750$ and random forest $0.747$. The
   approximate clinical knowledge is not a net benefit there.
-  \item \textbf{On the exact-knowledge datasets, \nexs{} leads but the margin is
-  small.} On tic-tac-toe \nexs{} reaches $0.995$ accuracy and $0.996$ F1 versus
-  MLP $0.989$/$0.991$, and \nexs{} with \emph{discovered} rules reaches $1.000$.
-  On the external KBANN benchmark (wbc) \nexs{} reaches $0.970$ versus MLP
-  $0.969$.
+  \item \textbf{On the exact-knowledge datasets, \nexs{} leads where the rules are
+  the data-generating process.} On tic-tac-toe \nexs{} reaches $1.000$ accuracy
+  and $1.000$ F1 versus MLP $0.990$/$0.992$, and \nexs{} with \emph{discovered}
+  rules also reaches $1.000$; both gaps are Holm-significant. On MONK-1 \nexs{}
+  matches the MLP at $1.000$, and on MONK-3 it leads ($0.989$ vs.\ MLP $0.973$,
+  $p_{\mathrm{Holm}}=0.020$). On the external KBANN benchmark (wbc) \nexs{} is
+  $0.967$ versus MLP $0.970$ --- a small non-significant deficit.
   \item \textbf{Corrupting the knowledge base barely changes accuracy on the real
   datasets.} \texttt{NEXS\_Corrupt} (about $40\%$ of rules dropped and surviving
-  thresholds jittered) scores within one point of \texttt{NEXS\_Expert} almost
-  everywhere, which is consistent with the neural head carrying most of the
-  predictive signal when knowledge is approximate.
+  thresholds jittered) scores within one point of \texttt{NEXS\_Expert} on heart,
+  pima and wbc, which is consistent with the neural head carrying most of the
+  predictive signal when knowledge is approximate; the gap is larger on the
+  exact-rule domains (MONK-1 $0.973$ vs.\ $1.000$).
 \end{enumerate}
 
 \input{../figures/table_nested_main.tex}
 
-\paragraph{Paired statistics: mostly no significant difference.}
-Table~\ref{tab:nested-stats} reports the row-level paired tests. Of the five
-prespecified comparisons per dataset, only three reach Holm-adjusted significance
-across the whole family, and all three are on datasets with exact rules: on
-tic-tac-toe \texttt{NEXS\_Discovered} beats the MLP ($\Delta=+0.012$,
-$p_{\mathrm{Holm}}=0.005$) and \texttt{NEXS\_Expert} beats gradient boosting
-($+0.009$, $p_{\mathrm{Holm}}=0.047$); on wbc \texttt{NEXS\_Expert} beats gradient
-boosting ($+0.014$, $p_{\mathrm{Holm}}=0.032$). Every comparison on heart, pima,
-monk1 and monk3 is non-significant after correction. In particular the
-headline claim that \nexs{} beats the MLP on heart or pima is \emph{not}
-supported: the paired differences are $0.000$ and $-0.012$ with intervals
-straddling zero. We report this as a null result rather than a weak positive one.
+\paragraph{Paired statistics: significance concentrates on the exact-rule domains.}
+Table~\ref{tab:nested-stats} reports the row-level paired tests (family of $30$
+prespecified comparisons, Holm-adjusted). Seven reach significance and all seven
+are on datasets whose rules are the data-generating process or on corrupted
+knowledge: on tic-tac-toe \texttt{NEXS\_Expert} and \texttt{NEXS\_Discovered} both
+beat the MLP ($\Delta=+0.010$, $p_{\mathrm{Holm}}=0.008$) and \texttt{NEXS\_Expert}
+beats gradient boosting ($+0.016$, $p_{\mathrm{Holm}}=0.0003$); on MONK-1
+\texttt{NEXS\_Expert} beats gradient boosting ($+0.054$, $p_{\mathrm{Holm}}<0.001$)
+and the corrupted KB ($+0.027$, $p_{\mathrm{Holm}}=0.0002$); on MONK-3
+\texttt{NEXS\_Expert} beats the MLP ($+0.016$, $p_{\mathrm{Holm}}=0.020$); and on
+pima \texttt{NEXS\_Expert} beats gradient boosting ($+0.046$,
+$p_{\mathrm{Holm}}=0.027$). Every \nexs{} comparison against the MLP on heart,
+pima and wbc is non-significant after correction: the paired differences are
+$+0.023$, $-0.009$ and $-0.003$ with intervals straddling zero. In particular the
+headline claim that \nexs{} beats the MLP on the clinical datasets is \emph{not}
+supported. We report this as a null result rather than a weak positive one.
 
 \input{../figures/table_nested_stats.tex}
 
@@ -817,12 +832,14 @@ Table~\ref{tab:nested-structural} measures discovery out-of-fold against publish
 ground truth. The learner recovers the exact MONK-1 rule set and a rule set
 logically equivalent to the eight tic-tac-toe winning lines (semantic rule F1
 $=1.000$, and the discovered DNF agrees with the true formula on $100\%$ of the
-full input domain). MONK-3 is the honest negative case: because its training
-labels carry $5\%$ class noise, the learner returns $10.8$ rules against $7$ true
-ones, semantic F1 $=0.395$, and the discovered DNF agrees with the true formula on
-only $66.5\%$ of the domain. Recovery is therefore demonstrated where the data
-are cleanly rule-governed and degrades under label noise, which is the realistic
-behaviour.
+full input domain). MONK-3 is the honest negative case for \emph{set} recovery:
+because its training labels carry $5\%$ class noise, the learner returns $10.8$
+rules against $7$ true ones and semantic F1 falls to $0.395$. It is, however, no
+longer a negative case for \emph{behaviour}: the discovered DNF agrees with the
+published formula on $99.8\%$ of the domain, i.e.\ the extra rules are harmless
+refinements rather than wrong logic. Recovery is therefore demonstrated where the
+data are cleanly rule-governed, and degrades gracefully --- equivalent decisions,
+non-minimal rule set --- under label noise.
 
 \input{../figures/table_nested_structural.tex}
 
@@ -830,9 +847,10 @@ behaviour.
 Table~\ref{tab:robustness} sweeps KB corruption, KB completeness and training-set
 size, all out-of-fold. The clearest and most defensible result of the paper is
 the low-data regime: on tic-tac-toe at $10\%$ of the training rows \nexs{} reaches
-$0.924$ accuracy versus MLP $0.757$, and at $25\%$ it reaches $0.962$ versus
-$0.845$; the gap closes as data grows and the two coincide by $100\%$. The same
-pattern holds on monk1 and monk3. Corrupting the KB degrades \nexs{} gradually
+$0.924$ accuracy versus MLP $0.757$, and at $25\%$ it reaches $0.956$ versus
+$0.854$; the gap closes as data grows and the two coincide by $100\%$. The same
+pattern holds on monk1 ($0.996$ vs.\ $0.673$ at $10\%$) and monk3 ($0.978$
+vs.\ $0.801$). Corrupting the KB degrades \nexs{} gradually
 rather than catastrophically, and on wbc the accuracy is essentially flat in the
 corruption level, again because the neural head dominates there.
 
@@ -841,17 +859,17 @@ corruption level, again because the neural head dominates there.
 \paragraph{Ablation and faithfulness.}
 Table~\ref{tab:ablation} isolates the two pathways. The fused model is never worse
 than the better single pathway by more than noise, and on monk1 and monk3 the
-fused model matches or exceeds the neural-only variant ($1.000$ vs.\ $0.996$ on
-monk1), while the symbolic-only variant is clearly worse where the KB is
-approximate ($0.531$ on monk3). The expert-prior regulariser
+fused model matches or exceeds the neural-only variant ($1.000$ vs.\ $1.000$ on
+monk1, $0.987$ vs.\ $0.973$ on monk3), while the symbolic-only variant is clearly
+worse where the KB is approximate ($0.531$ on monk3). The expert-prior regulariser
 (\emph{fused\_no\_prior}) makes no measurable difference here, so we do not claim
 it as a contribution.
 
 Table~\ref{tab:faithfulness} probes obedience directly. Both models satisfy rule
 antecedents when they fire (obedience $1.000$ everywhere), but the more
 informative probe is \emph{over-firing}: on near-miss rows that satisfy all but
-one literal, the MLP still predicts positive $44.9\%$ (monk1) and $58.3\%$
-(monk3) of the time, whereas \nexs{} over-fires less, at $35.3\%$ and $48.2\%$.
+one literal, the MLP still predicts positive $44.8\%$ (monk1) and $58.2\%$
+(monk3) of the time, whereas \nexs{} over-fires less, at $37.1\%$ and $48.4\%$.
 The rule layer therefore makes the model measurably more faithful to conjunctions
 --- but not perfectly so, and on tic-tac-toe and wbc both models over-fire on
 essentially every near-miss row, so faithfulness is dataset-dependent and should

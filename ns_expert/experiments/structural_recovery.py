@@ -58,15 +58,13 @@ MONK_RANGES = [(1, 2, 3), (1, 2, 3), (1, 2), (1, 2, 3), (1, 2, 3, 4), (1, 2)]
 
 
 def full_monk_domain(version: int) -> tuple[pd.DataFrame, np.ndarray]:
-    """All 432 MONK instances and their exact logical labels."""
-    rows = list(itertools.product(*MONK_RANGES))
-    Xd = pd.DataFrame(rows, columns=real_data.MONK_COLS)
-    a1, a2, a3, a4, a5, a6 = (np.array([r[i] for r in rows]) for i in range(6))
-    if version == 1:
-        lab = (a1 == a2) | (a5 == 1)
-    else:
-        lab = ((a5 == 3) & (a4 == 1)) | ((a5 != 4) & (a2 != 3))
-    return Xd, lab.astype(int)
+    """All 432 MONK instances, in normalised codebook units, with true labels.
+
+    Delegates to :func:`src.real_data.monk_full_domain` so the enumerated
+    domain, the label formula and the model's feature encoding cannot drift
+    apart (they previously used a raw-space grid and an incompatible codebook).
+    """
+    return real_data.monk_full_domain(version)
 
 
 def _full_domain(name: str):
@@ -85,11 +83,12 @@ def _train_split_bounds(name: str, seed: int):
 
 def evaluate_structural(name: str, seeds: list[int], epochs: int,
                         patience: int) -> pd.DataFrame:
-    Xd_raw, yd = _full_domain(name)
+    Xd, yd = _full_domain(name)
     rows = []
     for seed in seeds:
+        # lo/hi only feed domain construction; the enumerated domain is already
+        # on the model's canonical scale, so it must NOT be re-normalised.
         lo, hi = _train_split_bounds(name, seed)
-        Xd = real_data.normalize(Xd_raw, lo, hi)
         domain, tr, va, te = real_data.load_real(name, seed=seed)
         # the true logic in the model's normalised space
         true_set = {frozenset(str(l) for l in r.body)

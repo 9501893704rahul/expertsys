@@ -32,19 +32,29 @@ data/                small real datasets (fetched, committed)
 
 ## Real datasets
 
-Three small, standard datasets are used (`src/real_data.py`):
+Six small, standard datasets are used (`src/real_data.py`):
 
 | Dataset | Rows | Task | Knowledge source |
 |---------|------|------|------------------|
 | `heart` | 303 | UCI Cleveland heart disease | clinical guideline cut-offs (approx.) |
 | `pima`  | 768 | Pima Indians diabetes | ADA/WHO cut-offs (approx.) |
+| `wbc`   | 699 | Wisconsin breast cancer (original) | published KBANN hierarchy (external) |
 | `ttt`   | 958 | tic-tac-toe endgame | **genuine** logic: 8 winning lines |
+| `monk1` | 432 | MONK's problem 1 | **published** formula `(a1=a2) | (a5=1)` |
+| `monk3` | 432 | MONK's problem 3 | **published** formula, 5% label noise |
+
+Continuous datasets (`heart`, `pima`, `wbc`) are min-max normalised on the
+training split and expert thresholds are mapped through the same transform. The
+discrete datasets (`ttt`, `monk1`, `monk3`) instead use a *declared* codebook that
+does not depend on the training fold, since min-max scaling a categorical
+attribute would make its encoding drift with the fold (and collapse MONK's
+`a5=3`/`a5=4`).
 
 On `heart`/`pima` there is no ground-truth rule base, so rule recovery is
 measured against the *expert KB* and logic fidelity against the *KB oracle* — how
-much of the expert's logic the learned model preserves. On `ttt` the eight
-winning lines are a real ground truth, so rule recovery is measured against the
-true logic, bridging the synthetic and real studies.
+much of the expert's logic the learned model preserves. On `ttt`, `monk1` and
+`monk3` the target is a real ground truth, so rule recovery is measured against
+the true logic, bridging the synthetic and real studies.
 
 Data are fetched from UCI / public mirrors into `data/` and committed, so runs
 are offline-reproducible.
