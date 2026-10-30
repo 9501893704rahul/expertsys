@@ -101,9 +101,11 @@ PYTHONPATH=. python experiments/make_stats_figures.py
 `GITHUB_TOKEN` is read-only for this repo (403 on push) even though the API
 reports admin. Use `GH_PUSH_TOKEN` for `git push`.
 
-If both fail: as of the NEXS v5 session, `GH_PUSH_TOKEN` (a classic `ghp_` PAT)
-returns `401` in every auth form (Bearer / token / basic) --- it is expired or
-revoked --- and `GITHUB_TOKEN` is a GitHub-App installation token (`ghu_`) that
-authenticates but is denied write (`403 Resource not accessible by integration`).
-When that happens the commit cannot be pushed and must be reported to the user
-for a refreshed `GH_PUSH_TOKEN`. Working-tree-committed changes remain intact.
+If both fail: `GH_PUSH_TOKEN` can expire (a classic `ghp_` PAT returning `401` in
+every auth form) while `GITHUB_TOKEN` is a GitHub-App installation token (`ghu_`)
+that authenticates but is denied write (`403 Resource not accessible by
+integration`). When that happens, ask the user for a refreshed `GH_PUSH_TOKEN`
+with `repo` scope, then push with
+`git remote set-url origin "https://x-access-token:<token>@github.com/9501893704rahul/expertsys.git"`,
+and reset the remote URL to the token-free form afterwards. Committed changes
+survive until the token is refreshed.
