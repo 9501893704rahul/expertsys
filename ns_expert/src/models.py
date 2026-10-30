@@ -62,9 +62,17 @@ def _body(X, concepts, rule: Rule, col, tau, ccol=None) -> torch.Tensor:
     return m
 
 
-def _disjunction(mats: list[torch.Tensor]) -> torch.Tensor:
+def _disjunction(mats: list[torch.Tensor], n: int | None = None) -> torch.Tensor:
+    """Probabilistic sum (noisy-OR) over rule bodies.
+
+    ``n`` fixes the output length so an empty rule list yields a correctly
+    shaped all-zero tensor instead of a scalar.  An empty disjunction means "no
+    rule fires", which must broadcast against the batch, not collapse to shape 1.
+    """
     if not mats:
-        return torch.zeros(1)
+        if n is None:
+            return torch.zeros(1)
+        return torch.zeros(n)
     keep = torch.ones_like(mats[0])
     for m in mats:
         keep = keep * (1.0 - m)
@@ -220,10 +228,10 @@ class SemanticLossModel(_TorchClassifier):
         cprobs = []
         for c in self.domain.concepts:
             rules = [r for r in self.domain.expert_rules if r.head == c]
-            cprobs.append(_disjunction([_body(x, None, r, self.col, 0.1, self.ccol) for r in rules]))
+            cprobs.append(_disjunction([_body(x, None, r, self.col, 0.1, self.ccol) for r in rules], n))
         concepts = torch.stack(cprobs, dim=1) if cprobs else torch.zeros(n, 0)
         lrules = [r for r in self.domain.expert_rules if r.head == self.domain.label]
-        lprob = _disjunction([_body(x, concepts, r, self.col, 0.1, self.ccol) for r in lrules])
+        lprob = _disjunction([_body(x, concepts, r, self.col, 0.1, self.ccol) for r in lrules], n)
         return concepts, lprob
 
     def _loss(self, logits, y, x, extra):
@@ -255,7 +263,9 @@ class NEXS(_TorchClassifier):
         init = torch.tensor([r.cf for r in rules], dtype=torch.float32)
         self._cf = nn.Parameter(init.clone())
         self._prior = init.clone()
-        self.alpha = nn.Parameter(torch.tensor(0.5))
+        self.alpha = nn.Parameter(torch.tensor(self.kw.get("alpha_init", 0.5)))
+        if self.kw.get("freeze_alpha", False):
+            self.alpha.requires_grad_(False)
         self.lam_sem = self.kw.get("lam_sem", 0.5)
         self.lam_prior = self.kw.get("lam_prior", 1.0)
         self.alpha_only = self.kw.get("alpha_only", False)
@@ -280,7 +290,7 @@ class NEXS(_TorchClassifier):
             cf = self._cf[idx]
             bodies = [_body(x, None, self.rules[i], self.col, 0.1, self.ccol) for i in idx]
             mats = [torch.sigmoid(cf[j]) * b for j, b in enumerate(bodies)]
-            concepts.append(_disjunction(mats))
+            concepts.append(_disjunction(mats, x.shape[0]))
         cprob = torch.stack(concepts, dim=1) if concepts else torch.zeros(x.shape[0], 0)
         idx = [i for i, r in enumerate(self.rules) if r.head == self.domain.label]
         cf = self._cf[idx]
@@ -288,7 +298,7 @@ class NEXS(_TorchClassifier):
         for j, i in enumerate(idx):
             b = _body(x, cprob, self.rules[i], self.col, 0.1, self.ccol)
             mats.append(torch.sigmoid(cf[j]) * b)
-        return cprob, _disjunction(mats)
+        return cprob, _disjunction(mats, x.shape[0])
 
     def _extra(self, x):
         return self._layer(x)[1]

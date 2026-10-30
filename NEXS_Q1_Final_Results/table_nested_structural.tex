@@ -1,0 +1,14 @@
+\begin{table}[t]\centering
+\small
+\caption{Structural rule recovery out-of-fold. Rules are discovered from training rows only and compared with the published ground truth. \emph{Semantic} matches are logical: two rules match if they select the same points of the full input domain, even when written with different literals. \emph{Equiv.} is the fraction of the complete input domain on which the discovered DNF agrees with the true formula.}
+\label{tab:nested-structural}
+\begin{tabular}{lrrrrr}
+\toprule
+Dataset & \#true & \#disc. & Rule F1 (sem.) & Exact (sem.) & Equiv. \\
+\midrule
+monk1 & 4 & 4.0 & 1.000 & 1.00 & 1.000 \\
+monk3 & 7 & 10.8 & 0.395 & 0.00 & 0.665 \\
+ttt & 8 & 8.0 & 1.000 & 1.00 & 1.000 \\
+\bottomrule
+\end{tabular}
+\end{table}

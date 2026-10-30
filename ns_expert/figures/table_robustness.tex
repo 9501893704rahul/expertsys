@@ -1,0 +1,71 @@
+\begin{table}[t]\centering
+\small
+\caption{Robustness under the corrected protocol. Each row is one sweep point; accuracy is out-of-fold. \emph{corrupt} degrades the KB (0 = intact, 1 = no rules); \emph{completeness} keeps a fraction of the rules; \emph{lowdata} uses a fraction of the training rows only.}
+\label{tab:robustness}
+\begin{tabular}{llrrrr}
+\toprule
+Dataset & Sweep & Level & MLP & NEXS & $\Delta$ \\
+\midrule
+monk1 & completeness & 0 & 0.996 & 0.468 & -0.529 \\
+monk1 & completeness & 0.25 & 0.996 & 0.917 & -0.079 \\
+monk1 & completeness & 0.5 & 0.996 & 0.948 & -0.049 \\
+monk1 & completeness & 0.75 & 0.996 & 0.998 & +0.002 \\
+monk1 & completeness & 1 & 0.996 & 1.000 & +0.004 \\
+monk1 & corrupt & 0 & 0.996 & 1.000 & +0.004 \\
+monk1 & corrupt & 0.25 & 0.996 & 0.968 & -0.029 \\
+monk1 & corrupt & 0.5 & 0.996 & 0.933 & -0.063 \\
+monk1 & corrupt & 0.75 & 0.996 & 0.818 & -0.178 \\
+monk1 & corrupt & 1 & 0.996 & 0.468 & -0.529 \\
+monk1 & lowdata & 0.1 & 0.673 & 0.996 & +0.324 \\
+monk1 & lowdata & 0.25 & 0.804 & 1.000 & +0.196 \\
+monk1 & lowdata & 0.5 & 0.867 & 1.000 & +0.133 \\
+monk1 & lowdata & 0.75 & 0.860 & 1.000 & +0.140 \\
+monk1 & lowdata & 1 & 0.996 & 1.000 & +0.004 \\
+monk3 & completeness & 0 & 0.971 & 0.401 & -0.570 \\
+monk3 & completeness & 0.25 & 0.971 & 0.944 & -0.027 \\
+monk3 & completeness & 0.5 & 0.971 & 0.949 & -0.022 \\
+monk3 & completeness & 0.75 & 0.971 & 0.975 & +0.004 \\
+monk3 & completeness & 1 & 0.971 & 0.989 & +0.018 \\
+monk3 & corrupt & 0 & 0.971 & 0.989 & +0.018 \\
+monk3 & corrupt & 0.25 & 0.971 & 0.984 & +0.013 \\
+monk3 & corrupt & 0.5 & 0.971 & 0.969 & -0.002 \\
+monk3 & corrupt & 0.75 & 0.971 & 0.931 & -0.040 \\
+monk3 & corrupt & 1 & 0.971 & 0.401 & -0.570 \\
+monk3 & lowdata & 0.1 & 0.801 & 0.978 & +0.177 \\
+monk3 & lowdata & 0.25 & 0.872 & 0.984 & +0.112 \\
+monk3 & lowdata & 0.5 & 0.955 & 0.989 & +0.034 \\
+monk3 & lowdata & 0.75 & 0.951 & 0.989 & +0.038 \\
+monk3 & lowdata & 1 & 0.969 & 0.989 & +0.020 \\
+ttt & completeness & 0 & 0.990 & 0.656 & -0.334 \\
+ttt & completeness & 0.25 & 0.990 & 0.986 & -0.003 \\
+ttt & completeness & 0.5 & 0.990 & 0.994 & +0.004 \\
+ttt & completeness & 0.75 & 0.990 & 0.998 & +0.008 \\
+ttt & completeness & 1 & 0.990 & 0.998 & +0.008 \\
+ttt & corrupt & 0 & 0.990 & 0.998 & +0.008 \\
+ttt & corrupt & 0.25 & 0.990 & 0.999 & +0.009 \\
+ttt & corrupt & 0.5 & 0.990 & 0.996 & +0.006 \\
+ttt & corrupt & 0.75 & 0.990 & 0.992 & +0.002 \\
+ttt & corrupt & 1 & 0.990 & 0.656 & -0.334 \\
+ttt & lowdata & 0.1 & 0.757 & 0.924 & +0.167 \\
+ttt & lowdata & 0.25 & 0.844 & 0.962 & +0.118 \\
+ttt & lowdata & 0.5 & 0.934 & 0.993 & +0.058 \\
+ttt & lowdata & 0.75 & 0.973 & 0.995 & +0.022 \\
+ttt & lowdata & 1 & 0.989 & 0.997 & +0.008 \\
+wbc & completeness & 0 & 0.970 & 0.970 & +0.000 \\
+wbc & completeness & 0.25 & 0.970 & 0.967 & -0.003 \\
+wbc & completeness & 0.5 & 0.970 & 0.969 & -0.001 \\
+wbc & completeness & 0.75 & 0.970 & 0.967 & -0.003 \\
+wbc & completeness & 1 & 0.970 & 0.969 & -0.001 \\
+wbc & corrupt & 0 & 0.970 & 0.969 & -0.001 \\
+wbc & corrupt & 0.25 & 0.970 & 0.970 & +0.000 \\
+wbc & corrupt & 0.5 & 0.970 & 0.970 & +0.000 \\
+wbc & corrupt & 0.75 & 0.970 & 0.967 & -0.003 \\
+wbc & corrupt & 1 & 0.970 & 0.970 & +0.000 \\
+wbc & lowdata & 0.1 & 0.963 & 0.964 & +0.001 \\
+wbc & lowdata & 0.25 & 0.961 & 0.966 & +0.004 \\
+wbc & lowdata & 0.5 & 0.969 & 0.971 & +0.003 \\
+wbc & lowdata & 0.75 & 0.967 & 0.969 & +0.001 \\
+wbc & lowdata & 1 & 0.970 & 0.967 & -0.003 \\
+\bottomrule
+\end{tabular}
+\end{table}

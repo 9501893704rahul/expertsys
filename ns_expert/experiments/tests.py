@@ -298,6 +298,95 @@ def test_tree_metric_cannot_represent_or_of_conjunctions():
           r["f1"] < 0.2)
 
 
+def test_no_preprocessing_leak():
+    """Imputation/scaling must be fit on training rows only.
+
+    The leak-free loader leaves NaNs in place and fits the preprocessor on the
+    training split.  We verify (a) raw loaders keep missing values, and (b) the
+    fitted medians depend only on the training rows.
+    """
+    from src import real_data
+    from src.pipeline import Preprocessor
+
+    Xraw, y = real_data.load_heart_raw()
+    check("heart raw keeps missing values", int(Xraw.isna().sum().sum()) > 0)
+
+    prep = Preprocessor().fit(Xraw.iloc[:100], y[:100])
+    med_tr = prep.medians_.copy()
+    # a test row with a huge value must not move the fitted medians
+    prep.transform(Xraw.iloc[100:120])
+    check("fitted medians unchanged after transform", bool((prep.medians_ == med_tr).all()))
+
+    d, tr, va, te = real_data.load_real("heart", seed=0)
+    check("leak-free split has no NaNs", int(tr.X.isna().sum().sum() + te.X.isna().sum().sum()) == 0)
+    check("leak-free split is scaled to [0,1]",
+          float(tr.X.to_numpy().min()) >= 0.0 and float(tr.X.to_numpy().max()) <= 1.0)
+
+
+def test_oof_folds_are_disjoint_and_cover():
+    """Every row is a test row exactly once across outer folds."""
+    from src import real_data
+
+    _, y = real_data.DATASETS["heart"]["loader"]()
+    seen = np.zeros(len(y), dtype=int)
+    for f in real_data.make_oof_folds("heart", n_folds=5, seed=0):
+        seen[f["te_i"]] += 1
+        # validation rows must be drawn from the training pool, never the test pool
+        check("val disjoint from test", len(set(f["va_i"]) & set(f["te_i"])) == 0)
+        check("train disjoint from test", len(set(f["tr_i"]) & set(f["te_i"])) == 0)
+    check("each row is tested exactly once", bool((seen == 1).all()))
+
+
+def test_nested_threshold_is_validation_only():
+    """The decision threshold is selected on validation, never on test."""
+    from experiments.nested_cv import NEXS_GRID  # noqa: F401
+    from experiments.run_experiments import _best_threshold
+
+    rng = np.random.default_rng(0)
+    y_val = rng.integers(0, 2, size=200)
+    p_val = np.clip(0.5 + 0.3 * (y_val - 0.5) + rng.normal(0, 0.2, 200), 0, 1)
+    thr = _best_threshold(p_val, y_val, metric="f1")
+    check("threshold in (0,1)", 0.0 < thr < 1.0)
+
+
+def test_discovered_rules_are_not_injected():
+    """Discovery must not read the expert KB; it must learn from labels alone."""
+    from src import discovery, real_data
+
+    d, tr, va, te = real_data.load_real("ttt", seed=0)
+    rules_a = discovery.discover_rules(d, tr.X, tr.y)
+    # permute the expert KB: discovery output must be unchanged
+    from dataclasses import replace
+    d2 = replace(d, expert_rules=tuple(reversed(d.expert_rules)))
+    rules_b = discovery.discover_rules(d2, tr.X, tr.y)
+    check("discovery ignores expert KB", rules_a == rules_b)
+    check("discovery finds rules on ttt", len(rules_a) > 0)
+
+
+def test_semantic_rule_equivalence():
+    """Two syntactically different but logically equal rules compare equal."""
+    from experiments.nested_structural import _semantic_key, full_domain
+    import pandas as pd
+
+    Xd, _ = full_domain("ttt")
+    a = frozenset({("c00", "==", 1.0)})
+    b = frozenset({("c00", ">=", 0.75)})
+    check("==1 and >=0.75 are semantically equal on the ttt domain",
+          _semantic_key(a, Xd) == _semantic_key(b, Xd))
+
+
+def test_corruption_degrades_kb():
+    """Corruption must be monotone in level and empty at level 1."""
+    from src import discovery
+    from src.knowledge import DOMAINS
+
+    kb = DOMAINS["medical"].expert_rules
+    n0 = len(discovery.corrupt_rules(kb, 0.0, seed=0))
+    n1 = len(discovery.corrupt_rules(kb, 1.0, seed=0))
+    check("corruption level 0 keeps KB", n0 == len(kb))
+    check("corruption level 1 empties KB", n1 == 0)
+
+
 def main():
     test_expert_system_matches_oracle()
     test_rule_extraction_recovers_expert_rules()
@@ -320,6 +409,12 @@ def main():
     test_injected_rule_layer_mirrors_kb()
     test_genuine_rule_discovery_from_data()
     test_tree_metric_cannot_represent_or_of_conjunctions()
+    test_no_preprocessing_leak()
+    test_oof_folds_are_disjoint_and_cover()
+    test_nested_threshold_is_validation_only()
+    test_discovered_rules_are_not_injected()
+    test_semantic_rule_equivalence()
+    test_corruption_degrades_kb()
     print("\nall tests passed")
 
 

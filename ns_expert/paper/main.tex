@@ -82,7 +82,22 @@ recovers the exact ground-truth rule sets on MONK-1 and MONK-3 (precision and
 recall $1.0$) and a near-exact set on tic-tac-toe. Crucially, a correct rule
 layer is not obeyed everywhere: even with the exact rules, the fused model agrees
 with the true label on $97$--$98\%$ of the MONK domain but only $63\%$ of
-tic-tac-toe. We release code, data, and a fully reproducible experiment suite.
+tic-tac-toe. We then re-evaluate the whole study under a stricter protocol that
+removes two methodological flaws present in the exploratory analysis: data
+leakage (imputation, scaling and feature selection are now fitted on training
+rows only) and seed pseudo-replication ($5$-fold nested cross-validation with
+every row predicted exactly once, plus row-level paired McNemar tests with
+bootstrap intervals and Holm correction). Under that protocol the honest picture
+is narrower. \nexs{} is \emph{not} uniformly more accurate than strong baselines:
+on the two datasets with approximate knowledge (heart, pima) it does not beat a
+plain MLP or a random forest, and those differences are not statistically
+significant. What survives is a large and consistent advantage in the low-data
+regime when the knowledge is exact (on tic-tac-toe at $10\%$ of the training rows
+\nexs{} reaches $0.924$ accuracy versus $0.757$ for the MLP), exact or logically
+equivalent rule recovery on cleanly rule-governed data, and lower over-firing of
+rule conjunctions than the neural-only model. We report the negative and
+inconclusive results explicitly. We release code, data, and a fully reproducible
+experiment suite.
 \end{abstract}
 
 \section{Introduction}
@@ -285,6 +300,48 @@ train/validation/test, repeated over three seeds. We report the following.
 \end{description}
 All experiments run on CPU and are fully deterministic given the seed.
 
+\subsection{Corrected evaluation protocol}
+\label{sec:protocol}
+The single-split and seed-resampled protocols above are useful for exploration but
+are not sufficient for inference. We therefore add a second, stricter protocol and
+report the headline numbers under it.
+
+\paragraph{Leak-free preprocessing.}
+Imputation, feature scaling and feature selection are \emph{fitted on the training
+rows only} and then applied to validation and test rows
+(\texttt{src/pipeline.py}). An earlier version imputed missing values with
+full-dataset medians before splitting, which leaks test information into
+training; this is now removed, and the raw loaders deliberately leave missing
+values in place so that imputation is a fitted transformation.
+
+\paragraph{Nested cross-validation.}
+The outer loop is $5$ stratified folds; each row falls in the test block of
+exactly one fold, so every observation is predicted exactly once out-of-fold.
+The inner loop is a validation block carved from the outer \emph{training} rows
+only, and it is used for hyperparameter search, early stopping and decision
+threshold selection. The test block never influences any of those choices. Rule
+discovery for the \emph{discovered-KB} configuration also runs on the outer
+training rows only, so the discovered knowledge never sees the test block.
+
+\paragraph{Independent statistics.}
+Comparisons use the pooled out-of-fold predictions, so the unit of observation is
+a \emph{data row}, not a random seed. We report the mean paired accuracy
+difference with a $95\%$ row-level bootstrap interval, an exact McNemar test on
+the discordant pairs, and Holm-adjusted $p$-values across a family of five
+prespecified primary comparisons
+(\texttt{experiments/nested\_stats.py}). This replaces the earlier seed-level
+paired tests, which treated pseudo-replicates as independent samples and were
+anti-conservative.
+
+\paragraph{Configurations.}
+We compare the four \nexs{} configurations that the corrected protocol requires:
+neural-only (\texttt{MLP}), \nexs{} with the original expert rules
+(\texttt{NEXS\_Expert}), \nexs{} with rules \emph{discovered} from training rows
+only (\texttt{NEXS\_Discovered}), and \nexs{} with corrupted or incomplete expert
+rules (\texttt{NEXS\_Corrupt}). Baselines are logistic regression, a decision
+tree, a random forest and gradient boosting, plus a semantic-loss neuro-symbolic
+model. All are tuned under the identical nested protocol.
+
 \section{Results}
 \label{sec:results}
 Table~\ref{tab:main} and Figure~\ref{fig:main} summarise the main benchmark.
@@ -433,6 +490,12 @@ bases. The datasets are chosen to cover the regimes that matter.
   lines are a \emph{genuine} ground truth, so rule recovery can be measured
   against the true logic. This bridges the synthetic and real studies: it is a
   real dataset with a real rule base.
+  \item \textbf{wbc} --- Wisconsin breast cancer, original cytology data
+  ($n{=}699$). This is the dataset for which the KBANN breast-cancer knowledge
+  base was published (Towell \& Shavlik, 1994), so the knowledge base is external
+  and independent of our design. Intermediate concepts (\emph{atypia},
+  \emph{nuclei}, \emph{chromatin}) are defined by published cytological criteria
+  on the standard $1$--$10$ scale, and the label is malignant.
 \end{itemize}
 
 Features are min-max normalised on the training split and thresholds are mapped
@@ -702,22 +765,142 @@ separate, learnable layer and to choose the coupling that matches the deployment
 constraint---discrete rules when auditability dominates, \nexs{} when the model
 must learn from data yet remain rule-inspectable.
 
+\section{Corrected-Protocol Results}
+\label{sec:corrected}
+We now report the headline numbers under the strict protocol of
+Section~\ref{sec:protocol}: leak-free preprocessing, $5$-fold nested
+cross-validation with every row predicted exactly once, and row-level paired
+statistics. These supersede the exploratory numbers above for any inferential
+claim.
+
+\paragraph{Main comparison.}
+Table~\ref{tab:nested-main} gives accuracy, F1 and AUC for every method on all six
+datasets. Three points stand out, and two of them are negative results for \nexs{}.
+
+\begin{enumerate}
+  \item \textbf{On the two approximate-knowledge datasets, the rule layer does not
+  help.} On heart, \nexs{} with the expert KB attains $0.792$ accuracy, identical
+  to the plain MLP ($0.792$) and below the random forest ($0.828$). On pima,
+  \nexs{} is at $0.742$ versus MLP $0.754$ and random forest $0.759$. The
+  approximate clinical knowledge is not a net benefit there.
+  \item \textbf{On the exact-knowledge datasets, \nexs{} leads but the margin is
+  small.} On tic-tac-toe \nexs{} reaches $0.995$ accuracy and $0.996$ F1 versus
+  MLP $0.989$/$0.991$, and \nexs{} with \emph{discovered} rules reaches $1.000$.
+  On the external KBANN benchmark (wbc) \nexs{} reaches $0.970$ versus MLP
+  $0.969$.
+  \item \textbf{Corrupting the knowledge base barely changes accuracy on the real
+  datasets.} \texttt{NEXS\_Corrupt} (about $40\%$ of rules dropped and surviving
+  thresholds jittered) scores within one point of \texttt{NEXS\_Expert} almost
+  everywhere, which is consistent with the neural head carrying most of the
+  predictive signal when knowledge is approximate.
+\end{enumerate}
+
+\input{../figures/table_nested_main.tex}
+
+\paragraph{Paired statistics: mostly no significant difference.}
+Table~\ref{tab:nested-stats} reports the row-level paired tests. Of the five
+prespecified comparisons per dataset, only three reach Holm-adjusted significance
+across the whole family, and all three are on datasets with exact rules: on
+tic-tac-toe \texttt{NEXS\_Discovered} beats the MLP ($\Delta=+0.012$,
+$p_{\mathrm{Holm}}=0.005$) and \texttt{NEXS\_Expert} beats gradient boosting
+($+0.009$, $p_{\mathrm{Holm}}=0.047$); on wbc \texttt{NEXS\_Expert} beats gradient
+boosting ($+0.014$, $p_{\mathrm{Holm}}=0.032$). Every comparison on heart, pima,
+monk1 and monk3 is non-significant after correction. In particular the
+headline claim that \nexs{} beats the MLP on heart or pima is \emph{not}
+supported: the paired differences are $0.000$ and $-0.012$ with intervals
+straddling zero. We report this as a null result rather than a weak positive one.
+
+\input{../figures/table_nested_stats.tex}
+
+\paragraph{Structural rule recovery is non-circular and partial.}
+Table~\ref{tab:nested-structural} measures discovery out-of-fold against published
+ground truth. The learner recovers the exact MONK-1 rule set and a rule set
+logically equivalent to the eight tic-tac-toe winning lines (semantic rule F1
+$=1.000$, and the discovered DNF agrees with the true formula on $100\%$ of the
+full input domain). MONK-3 is the honest negative case: because its training
+labels carry $5\%$ class noise, the learner returns $10.8$ rules against $7$ true
+ones, semantic F1 $=0.395$, and the discovered DNF agrees with the true formula on
+only $66.5\%$ of the domain. Recovery is therefore demonstrated where the data
+are cleanly rule-governed and degrades under label noise, which is the realistic
+behaviour.
+
+\input{../figures/table_nested_structural.tex}
+
+\paragraph{Robustness.}
+Table~\ref{tab:robustness} sweeps KB corruption, KB completeness and training-set
+size, all out-of-fold. The clearest and most defensible result of the paper is
+the low-data regime: on tic-tac-toe at $10\%$ of the training rows \nexs{} reaches
+$0.924$ accuracy versus MLP $0.757$, and at $25\%$ it reaches $0.962$ versus
+$0.845$; the gap closes as data grows and the two coincide by $100\%$. The same
+pattern holds on monk1 and monk3. Corrupting the KB degrades \nexs{} gradually
+rather than catastrophically, and on wbc the accuracy is essentially flat in the
+corruption level, again because the neural head dominates there.
+
+\input{../figures/table_robustness.tex}
+
+\paragraph{Ablation and faithfulness.}
+Table~\ref{tab:ablation} isolates the two pathways. The fused model is never worse
+than the better single pathway by more than noise, and on monk1 and monk3 the
+fused model matches or exceeds the neural-only variant ($1.000$ vs.\ $0.996$ on
+monk1), while the symbolic-only variant is clearly worse where the KB is
+approximate ($0.531$ on monk3). The expert-prior regulariser
+(\emph{fused\_no\_prior}) makes no measurable difference here, so we do not claim
+it as a contribution.
+
+Table~\ref{tab:faithfulness} probes obedience directly. Both models satisfy rule
+antecedents when they fire (obedience $1.000$ everywhere), but the more
+informative probe is \emph{over-firing}: on near-miss rows that satisfy all but
+one literal, the MLP still predicts positive $44.9\%$ (monk1) and $58.3\%$
+(monk3) of the time, whereas \nexs{} over-fires less, at $35.3\%$ and $48.2\%$.
+The rule layer therefore makes the model measurably more faithful to conjunctions
+--- but not perfectly so, and on tic-tac-toe and wbc both models over-fire on
+essentially every near-miss row, so faithfulness is dataset-dependent and should
+not be assumed.
+
+\input{../figures/table_ablation_nested.tex}
+\input{../figures/table_faithfulness.tex}
+
+\paragraph{Takeaway of the corrected protocol.}
+Under a protocol that removes leakage and seed pseudo-replication, the honest
+summary is narrower than the exploratory one. \nexs{} is not uniformly more
+accurate than strong baselines; on the two datasets with approximate knowledge it
+is not better than a plain MLP or a random forest, and those differences are not
+significant. What survives is (i) a large, consistent advantage in the low-data
+regime when the knowledge is exact, (ii) exact or logically equivalent rule
+recovery on cleanly rule-governed data, and (iii) lower over-firing of rule
+conjunctions than the neural-only model.
+
 \section{Threats to Validity}
 \label{sec:threats}
 Our synthetic benchmarks buy ground-truth rules at the cost of ecological
 realism; the regimes and noise levels are plausible but not drawn from a deployed
-system. We evaluate two synthetic domains over three seeds and five real/logical
-datasets over five seeds; the significance study uses $20$ seeds. The qualitative
-ordering is stable across them, but effect sizes should be read as indicative.
+system. We evaluate two synthetic domains, three logical/real datasets with
+published ground truth (tic-tac-toe, MONK-1, MONK-3) and three clinical datasets
+(heart, pima, wbc). The exploratory numbers use three to five seeds; the corrected
+protocol (Section~\ref{sec:protocol}) uses $5$-fold nested cross-validation with
+every row predicted exactly once.
 
-\paragraph{Seeds are not independent samples.}
-The $20$-seed study re-permutes a single finite dataset, so each row is tested
-several times and the seeds are pseudo-replicates; a paired test over seeds is
-therefore anti-conservative, and we report the out-of-fold McNemar test
-(Table~\ref{tab:independent}) as the primary evidence. Under that clean protocol
-the significant accuracy advantage of \nexs{} over the MLP largely vanishes, and
-we make no significant-superiority claim for accuracy on any dataset. The
-defensible claim is parity of accuracy with higher logic fidelity.
+\paragraph{Two flaws in the exploratory analysis, now fixed.}
+We flag these explicitly because they affected the earlier headline claims.
+\emph{Data leakage}: imputation, scaling and feature selection were originally
+fitted on the full dataset before splitting, which leaks test information into
+training. This is removed: the raw loaders now leave missing values in place and
+all preprocessing is fitted inside the training fold (\texttt{src/pipeline.py},
+\texttt{src/real\_data.py}). \emph{Seed pseudo-replication}: the $20$-seed study
+re-permutes a single finite dataset, so each row is tested several times and a
+paired test over seeds is anti-conservative. This is replaced by row-level paired
+tests on pooled out-of-fold predictions, where the unit of observation is a data
+row and every row is predicted exactly once
+(\texttt{experiments/nested\_stats.py}). Under the corrected protocol the
+significant accuracy advantage of \nexs{} over the MLP largely vanishes, and we
+make no significant-superiority claim for accuracy on heart or pima.
+
+\paragraph{The corrected protocol is itself conservative.}
+A $5$-fold nested protocol with row-level tests is more conservative than
+seed-level testing, so it may under-power genuinely small effects on datasets of a
+few hundred rows. We report the point estimates and intervals rather than
+claiming significance, and the low-data advantage is the only effect large enough
+to be robust to this conservatism.
 
 \paragraph{Rule recovery is measured three ways, and two of them are weak.}
 Distilling a depth-limited decision tree cannot represent an OR-of-conjunctions:
@@ -732,12 +915,14 @@ the ground truth is guaranteed to succeed and is evidence of implementation, not
 of discovery. We report it (Table~\ref{tab:structural}) only as a check that the
 layer exposes what it was given.
 
-The sound discovery measurement (Table~\ref{tab:discovery}) uses an independent
-candidate-generation learner trained on labels alone, and it recovers the exact
-rule sets on MONK-1 and MONK-3 and a near-exact set on tic-tac-toe. Discovery is
-therefore demonstrated on logical domains with published ground truth; it is
-\emph{not} demonstrated for heart and pima, where no ground truth exists and the
-expert KB is an approximation rather than the data-generating process.
+The sound discovery measurement (Tables~\ref{tab:discovery}
+and~\ref{tab:nested-structural}) uses an independent candidate-generation learner
+trained on labels alone and evaluated out-of-fold. It recovers the exact rule sets
+on MONK-1 and a logically equivalent set on tic-tac-toe, but only a partial set on
+MONK-3, whose labels carry $5\%$ noise. Discovery is therefore demonstrated on
+cleanly rule-governed logical domains with published ground truth; it is \emph{not}
+demonstrated for heart, pima and wbc, where no ground truth exists and the expert
+KB is an approximation rather than the data-generating process.
 
 \paragraph{The rules are recovered but not always obeyed.}
 Structural recovery does not imply the fused model follows the rules: on

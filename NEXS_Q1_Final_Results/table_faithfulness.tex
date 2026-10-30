@@ -1,0 +1,18 @@
+\begin{table}[t]\centering
+\small
+\caption{Logical faithfulness (out-of-fold). \emph{Obed.}: fraction of counterfactual rows satisfying a rule antecedent that the model predicts positive. \emph{Over-fire}: fraction of near-miss rows (all but one literal satisfied) that the model still predicts positive --- a faithful conjunction should not fire on these.}
+\label{tab:faithfulness}
+\begin{tabular}{lcccc}
+\toprule
+Model & monk1 & monk3 & ttt & wbc \\
+\midrule
+\multicolumn{5}{l}{\textit{obedience}} \\
+MLP & 1.000 & 1.000 & 1.000 & 1.000 \\
+NEXS\_Expert & 1.000 & 1.000 & 1.000 & 1.000 \\
+\midrule
+\multicolumn{5}{l}{\textit{over-firing}} \\
+MLP & 0.449 & 0.583 & 1.000 & 1.000 \\
+NEXS\_Expert & 0.353 & 0.482 & 0.998 & 1.000 \\
+\bottomrule
+\end{tabular}
+\end{table}

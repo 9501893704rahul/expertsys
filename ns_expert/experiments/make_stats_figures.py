@@ -236,6 +236,190 @@ def table_discovery(disc: pd.DataFrame) -> None:
     (FIG / "table_discovery.tex").write_text("\n".join(lines))
 
 
+def _esc(s: str) -> str:
+    return str(s).replace("_", r"\_")
+
+
+def table_nested_main(metrics: pd.DataFrame) -> None:
+    """Accuracy / F1 / AUC per (dataset, method) under nested CV."""
+    order = ["LogReg", "DecisionTree", "RandomForest", "GradientBoosting",
+             "MLP", "SemanticLoss", "NEXS_Expert", "NEXS_Discovered",
+             "NEXS_Corrupt"]
+    methods = [m for m in order if m in set(metrics.method)]
+    datasets = sorted(metrics.dataset.unique())
+    acc = metrics.pivot_table(index="method", columns="dataset", values="acc")
+    f1 = metrics.pivot_table(index="method", columns="dataset", values="f1")
+    auc = metrics.pivot_table(index="method", columns="dataset", values="auc")
+    lines = [
+        r"\begin{table}[t]\centering",
+        r"\small",
+        r"\caption{Accuracy (top), F1 (middle) and AUC (bottom) under the corrected "
+        r"nested-CV protocol (5 outer folds, every row predicted exactly once). "
+        r"All preprocessing, tuning, early stopping and threshold selection happen "
+        r"inside the training folds.}",
+        r"\label{tab:nested-main}",
+        r"\begin{tabular}{l" + "c" * len(datasets) + "}",
+        r"\toprule",
+        "Method & " + " & ".join(_esc(d) for d in datasets) + r" \\",
+        r"\midrule",
+    ]
+    for block, name in ((acc, "Acc"), (f1, "F1"), (auc, "AUC")):
+        lines.append(r"\multicolumn{%d}{l}{\textit{%s}} \\" % (len(datasets) + 1, name))
+        for m in methods:
+            if m not in block.index:
+                continue
+            cells = " & ".join(f"{block.loc[m, d]:.3f}" for d in datasets)
+            lines.append(f"{_esc(m)} & {cells} \\\\")
+        if name != "AUC":
+            lines.append(r"\midrule")
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
+    (FIG / "table_nested_main.tex").write_text("\n".join(lines))
+
+
+def table_nested_stats(stats: pd.DataFrame) -> None:
+    """Paired row-level comparisons with bootstrap CIs and Holm correction."""
+    lines = [
+        r"\begin{table}[t]\centering",
+        r"\small",
+        r"\caption{Paired comparisons on out-of-fold predictions. The unit of "
+        r"observation is a data row, not a random seed. $\Delta$ is the mean "
+        r"paired accuracy difference (A$-$B); CI is a 95\% row-level bootstrap "
+        r"interval; $p$ is an exact McNemar test and $p_{\mathrm{Holm}}$ the "
+        r"Holm-adjusted value across the prespecified family.}",
+        r"\label{tab:nested-stats}",
+        r"\begin{tabular}{llrrrrr}",
+        r"\toprule",
+        r"Dataset & Comparison & $\Delta$ & CI$_{95}$ & $p$ & $p_{\mathrm{Holm}}$ & Sig. \\",
+        r"\midrule",
+    ]
+    for _, r in stats.iterrows():
+        comp = f"{_esc(r.method_a)} $-$ {_esc(r.method_b)}"
+        sig = r"\checkmark" if r.get("significant_holm", 0) else "--"
+        lines.append(
+            f"{_esc(r.dataset)} & {comp} & {r.mean_diff:+.3f} & "
+            f"[{r.ci_lo:+.3f}, {r.ci_hi:+.3f}] & {r.p_raw:.3f} & "
+            f"{r.p_holm:.3f} & {sig} \\\\")
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
+    (FIG / "table_nested_stats.tex").write_text("\n".join(lines))
+
+
+def table_nested_structural(struct: pd.DataFrame) -> None:
+    """Out-of-fold structural rule recovery (syntactic and semantic)."""
+    agg = struct.groupby("dataset").mean(numeric_only=True)
+    lines = [
+        r"\begin{table}[t]\centering",
+        r"\small",
+        r"\caption{Structural rule recovery out-of-fold. Rules are discovered from "
+        r"training rows only and compared with the published ground truth. "
+        r"\emph{Semantic} matches are logical: two rules match if they select the "
+        r"same points of the full input domain, even when written with different "
+        r"literals. \emph{Equiv.} is the fraction of the complete input domain on "
+        r"which the discovered DNF agrees with the true formula.}",
+        r"\label{tab:nested-structural}",
+        r"\begin{tabular}{lrrrrr}",
+        r"\toprule",
+        r"Dataset & \#true & \#disc. & Rule F1 (sem.) & Exact (sem.) & Equiv. \\",
+        r"\midrule",
+    ]
+    for ds in sorted(agg.index):
+        r = agg.loc[ds]
+        lines.append(
+            f"{_esc(ds)} & {r.n_truth:.0f} & {r.n_discovered:.1f} & "
+            f"{r.rule_f1_semantic:.3f} & {r.exact_recovery_semantic:.2f} & "
+            f"{r.logical_equivalence:.3f} \\\\")
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
+    (FIG / "table_nested_structural.tex").write_text("\n".join(lines))
+
+
+def table_robustness(rob: pd.DataFrame) -> None:
+    """Accuracy vs KB corruption / completeness / training fraction."""
+    piv = rob.pivot_table(index=["dataset", "sweep", "level"],
+                          columns="method", values="acc").reset_index()
+    lines = [
+        r"\begin{table}[t]\centering",
+        r"\small",
+        r"\caption{Robustness under the corrected protocol. Each row is one "
+        r"sweep point; accuracy is out-of-fold. \emph{corrupt} degrades the KB "
+        r"(0 = intact, 1 = no rules); \emph{completeness} keeps a fraction of "
+        r"the rules; \emph{lowdata} uses a fraction of the training rows only.}",
+        r"\label{tab:robustness}",
+        r"\begin{tabular}{llrrrr}",
+        r"\toprule",
+        r"Dataset & Sweep & Level & MLP & NEXS & $\Delta$ \\",
+        r"\midrule",
+    ]
+    for _, r in piv.iterrows():
+        mlp = r.get("MLP", np.nan)
+        nexs = r.get("NEXS", np.nan)
+        lines.append(
+            f"{_esc(r.dataset)} & {_esc(r.sweep)} & {r.level:g} & {mlp:.3f} & "
+            f"{nexs:.3f} & {nexs - mlp:+.3f} \\\\")
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
+    (FIG / "table_robustness.tex").write_text("\n".join(lines))
+
+
+def table_ablation(abl: pd.DataFrame, faith: pd.DataFrame | None) -> None:
+    """Neural-vs-symbolic ablation and rule-faithfulness on counterfactuals."""
+    acc = abl.pivot_table(index="method", columns="dataset", values="acc")
+    order = ["neural_only", "symbolic_only", "fused", "fused_no_prior"]
+    methods = [m for m in order if m in acc.index]
+    datasets = sorted(abl.dataset.unique())
+    lines = [
+        r"\begin{table}[t]\centering",
+        r"\small",
+        r"\caption{Neural-vs-symbolic ablation (accuracy, out-of-fold). "
+        r"\emph{neural\_only} freezes the symbolic pathway off; "
+        r"\emph{symbolic\_only} drops the neural logit; \emph{fused} is the full "
+        r"model; \emph{fused\_no\_prior} removes the expert-prior regulariser.}",
+        r"\label{tab:ablation}",
+        r"\begin{tabular}{l" + "c" * len(datasets) + "}",
+        r"\toprule",
+        "Variant & " + " & ".join(_esc(d) for d in datasets) + r" \\",
+        r"\midrule",
+    ]
+    for m in methods:
+        cells = " & ".join(f"{acc.loc[m, d]:.3f}" if d in acc.columns else "--"
+                           for d in datasets)
+        lines.append(f"{_esc(m)} & {cells} \\\\")
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
+    (FIG / "table_ablation_nested.tex").write_text("\n".join(lines))
+
+    if faith is not None and len(faith):
+        fg = faith.pivot_table(index="method", columns="dataset",
+                               values="obedience")
+        fg2 = faith.pivot_table(index="method", columns="dataset",
+                                values="over_firing")
+        fdatasets = sorted(faith.dataset.unique())
+        flines = [
+            r"\begin{table}[t]\centering",
+            r"\small",
+            r"\caption{Logical faithfulness (out-of-fold). \emph{Obed.}: fraction "
+            r"of counterfactual rows satisfying a rule antecedent that the model "
+            r"predicts positive. \emph{Over-fire}: fraction of near-miss rows "
+            r"(all but one literal satisfied) that the model still predicts "
+            r"positive --- a faithful conjunction should not fire on these.}",
+            r"\label{tab:faithfulness}",
+            r"\begin{tabular}{l" + "c" * len(fdatasets) + "}",
+            r"\toprule",
+            "Model & " + " & ".join(_esc(d) for d in fdatasets) + r" \\",
+            r"\midrule",
+            r"\multicolumn{%d}{l}{\textit{obedience}} \\" % (len(fdatasets) + 1),
+        ]
+        for m in fg.index:
+            cells = " & ".join(f"{fg.loc[m, d]:.3f}" if d in fg.columns else "--"
+                               for d in fdatasets)
+            flines.append(f"{_esc(m)} & {cells} \\\\")
+        flines.append(r"\midrule")
+        flines.append(r"\multicolumn{%d}{l}{\textit{over-firing}} \\"
+                      % (len(fdatasets) + 1))
+        for m in fg2.index:
+            cells = " & ".join(f"{fg2.loc[m, d]:.3f}" if d in fg2.columns else "--"
+                               for d in fdatasets)
+            flines.append(f"{_esc(m)} & {cells} \\\\")
+        flines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
+        (FIG / "table_faithfulness.tex").write_text("\n".join(flines))
+
+
 def main() -> None:
     if not COND.exists():
         print("missing", COND, "- run run_rule_conditions.py first")
@@ -265,6 +449,26 @@ def main() -> None:
     disc_path = ROOT / "results" / "discovery" / "rule_discovery.csv"
     if disc_path.exists():
         table_discovery(pd.read_csv(disc_path))
+
+    # corrected-protocol tables (Phase 1)
+    nested = ROOT / "results" / "nested_cv"
+    met = nested / "nested_cv_metrics.csv"
+    if met.exists():
+        table_nested_main(pd.read_csv(met))
+    stat = nested / "paired_statistics.csv"
+    if stat.exists():
+        table_nested_stats(pd.read_csv(stat))
+    nstruct = ROOT / "results" / "nested_structural" / "structural_recovery_oof.csv"
+    if nstruct.exists():
+        table_nested_structural(pd.read_csv(nstruct))
+    rob = ROOT / "results" / "nested_robustness" / "robustness.csv"
+    if rob.exists():
+        table_robustness(pd.read_csv(rob))
+    ablp = ROOT / "results" / "nested_ablation"
+    if (ablp / "ablation.csv").exists():
+        faith = (pd.read_csv(ablp / "faithfulness.csv")
+                 if (ablp / "faithfulness.csv").exists() else None)
+        table_ablation(pd.read_csv(ablp / "ablation.csv"), faith)
     print("stats figures/tables ->", FIG)
 
 
