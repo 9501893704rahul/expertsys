@@ -1,0 +1,21 @@
+\begin{table}[t]\centering
+\caption{Ablation of the proposed model (mean over seeds).}
+\label{tab:abl}
+\begin{tabular}{llccc}
+\toprule
+Domain & Variant & Acc & F1 & LogicFid \\
+\midrule
+industrial & NEXS(full) & 0.878 & 0.510 & 0.865 \\
+industrial & NEXS(no rule layer) & 0.879 & 0.514 & 0.879 \\
+industrial & NEXS(rule layer only) & 0.883 & 0.560 & 0.839 \\
+industrial & NEXS(no semantic loss) & 0.879 & 0.511 & 0.873 \\
+industrial & NEXS(no expert prior) & 0.881 & 0.536 & 0.863 \\
+\midrule
+medical & NEXS(full) & 0.880 & 0.705 & 0.904 \\
+medical & NEXS(no rule layer) & 0.892 & 0.733 & 0.896 \\
+medical & NEXS(rule layer only) & 0.861 & 0.680 & 0.911 \\
+medical & NEXS(no semantic loss) & 0.881 & 0.718 & 0.902 \\
+medical & NEXS(no expert prior) & 0.876 & 0.713 & 0.879 \\
+\bottomrule
+\end{tabular}
+\end{table}

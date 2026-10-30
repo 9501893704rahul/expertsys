@@ -228,7 +228,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2, 3, 4])
     ap.add_argument("--datasets", nargs="+", default=DATASETS)
+    ap.add_argument("--tag", default="", help="suffix for output files, e.g. '20seed'")
     args = ap.parse_args()
+    sfx = f"_{args.tag}" if args.tag else ""
 
     main_rows, eff_rows, sub_rows, abl_rows, lat_rows = [], [], [], [], []
     for name in args.datasets:
@@ -246,13 +248,13 @@ def main():
     abl_df = pd.concat(abl_rows, ignore_index=True)
     lat_df = pd.concat(lat_rows, ignore_index=True)
 
-    main_df.to_csv(RESULTS / "real_e1_main.csv", index=False)
-    eff_df.to_csv(RESULTS / "real_e4_data_efficiency.csv", index=False)
-    sub_df.to_csv(RESULTS / "real_e5_subgroup.csv", index=False)
-    abl_df.to_csv(RESULTS / "real_e6_ablation.csv", index=False)
-    lat_df.to_csv(RESULTS / "real_e7_latency.csv", index=False)
+    main_df.to_csv(RESULTS / f"real_e1_main{sfx}.csv", index=False)
+    eff_df.to_csv(RESULTS / f"real_e4_data_efficiency{sfx}.csv", index=False)
+    sub_df.to_csv(RESULTS / f"real_e5_subgroup{sfx}.csv", index=False)
+    abl_df.to_csv(RESULTS / f"real_e6_ablation{sfx}.csv", index=False)
+    lat_df.to_csv(RESULTS / f"real_e7_latency{sfx}.csv", index=False)
 
-    (RESULTS / "real_summary.json").write_text(json.dumps({
+    (RESULTS / f"real_summary{sfx}.json").write_text(json.dumps({
         "seeds": args.seeds, "datasets": args.datasets,
         "main_mean": main_df.groupby(["dataset", "method"]).mean(numeric_only=True)
         .reset_index().to_dict("records"),

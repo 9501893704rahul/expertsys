@@ -1,0 +1,28 @@
+\begin{table}[t]\centering
+\caption{Effect of expert-knowledge quality and data quantity. Entries are NEXS $-$ MLP test accuracy (mean over 5 seeds); positive means the expert prior helps. \emph{kb} is the fraction of expert rules corrupted (0 = clean KB, 1 = no knowledge).}
+\label{tab:conditions}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llccc}
+\toprule
+Dataset & KB corruption & 25\% data & 50\% data & 100\% data \\
+\midrule
+heart & 0 & \textbf{+0.007} & -0.000 & \textbf{+0.013} \\
+heart & 0.25 & \textbf{+0.010} & -0.013 & \textbf{+0.013} \\
+heart & 0.5 & \textbf{+0.010} & -0.013 & -0.003 \\
+heart & 0.75 & -0.000 & -0.007 & -0.010 \\
+heart & 1 & -0.020 & -0.052 & -0.118 \\
+\midrule
+pima & 0 & \textbf{+0.006} & -0.018 & \textbf{+0.008} \\
+pima & 0.25 & +0.001 & -0.018 & \textbf{+0.018} \\
+pima & 0.5 & \textbf{+0.021} & -0.017 & +0.004 \\
+pima & 0.75 & +0.001 & -0.018 & -0.003 \\
+pima & 1 & -0.014 & -0.091 & -0.039 \\
+\midrule
+ttt & 0 & \textbf{+0.149} & \textbf{+0.051} & \textbf{+0.010} \\
+ttt & 0.25 & \textbf{+0.142} & \textbf{+0.047} & \textbf{+0.010} \\
+ttt & 0.5 & \textbf{+0.140} & \textbf{+0.041} & \textbf{+0.009} \\
+ttt & 0.75 & \textbf{+0.130} & \textbf{+0.036} & \textbf{+0.010} \\
+ttt & 1 & -0.080 & -0.170 & -0.214 \\
+\bottomrule
+\end{tabular}}
+\end{table}

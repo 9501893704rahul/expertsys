@@ -1,0 +1,21 @@
+\begin{table}[t]\centering
+\caption{Minority-class F1 vs. training-set size.}
+\label{tab:eff}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llccccc}
+\toprule
+Domain & Method & 150 & 300 & 600 & 1200 & 2400 \\
+\midrule
+industrial & ESS(discrete) & 0.624 & 0.624 & 0.624 & 0.624 & 0.624 \\
+industrial & MLP & 0.413 & 0.408 & 0.350 & 0.435 & 0.476 \\
+industrial & NEXS(proposed) & 0.428 & 0.548 & 0.540 & 0.497 & 0.553 \\
+industrial & RandomForest & 0.497 & 0.550 & 0.481 & 0.616 & 0.619 \\
+industrial & SemanticLoss & 0.356 & 0.364 & 0.348 & 0.483 & 0.531 \\
+medical & ESS(discrete) & 0.742 & 0.742 & 0.742 & 0.742 & 0.742 \\
+medical & MLP & 0.544 & 0.610 & 0.585 & 0.623 & 0.643 \\
+medical & NEXS(proposed) & 0.581 & 0.647 & 0.650 & 0.658 & 0.690 \\
+medical & RandomForest & 0.697 & 0.784 & 0.744 & 0.786 & 0.823 \\
+medical & SemanticLoss & 0.536 & 0.638 & 0.616 & 0.597 & 0.671 \\
+\bottomrule
+\end{tabular}}
+\end{table}

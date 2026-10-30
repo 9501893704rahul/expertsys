@@ -72,6 +72,36 @@ PYTHONPATH=. python experiments/run_real_experiments.py --seeds 0 1 2 3 4
 PYTHONPATH=. python experiments/make_real_figures.py
 ```
 
+## When do expert rules help? (factorial study + significance)
+
+Crosses knowledge-base corruption {0,.25,.5,.75,1} against training fraction
+{.25,.5,1} for ESS/MLP/NEXS, then adds paired inference:
+
+```bash
+# 3 datasets x 5 seeds x 15 conditions x 3 methods = 675 runs
+PYTHONPATH=. python experiments/run_rule_conditions.py --datasets heart pima ttt \
+    --seeds 0 1 2 3 4 --output results/conditions_5seed
+
+# paired Wilcoxon + Holm + 95% bootstrap CIs (5 seeds) + rule-behaviour probe
+PYTHONPATH=. python experiments/advanced_analysis.py --results results/real_e1_main.csv \
+    --out results/stats_5seed --probes --probe-seeds 0 1 2 3 4
+
+# 20-seed significance study
+PYTHONPATH=. python experiments/run_real_experiments.py --seeds 0 1 2 3 4 5 6 7 8 9 \
+    10 11 12 13 14 15 16 17 18 19 --tag 20seed
+PYTHONPATH=. python experiments/advanced_analysis.py --results results/real_e1_main_20seed.csv \
+    --out results/stats_20seed --no-probes
+
+PYTHONPATH=. python experiments/make_stats_figures.py   # figures + LaTeX tables
+```
+
+Key finding: the expert prior is a **monotone, positive** contribution while the
+knowledge is intact (NEXS$-$MLP accuracy $+0.025$ at corruption $0$, decaying to
+$+0.016$ at $0.75$) and **negative** once it is removed ($-0.089$). On tic-tac-toe
+(genuine ground-truth logic) NEXS beats MLP and semantic loss on accuracy, AUC,
+logic fidelity and calibration with Holm-corrected $p<0.01$ over 20 seeds; on
+heart/pima the differences are *not* significant and we do not claim them.
+
 ## Reproduce
 
 ```bash

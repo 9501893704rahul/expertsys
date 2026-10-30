@@ -63,7 +63,15 @@ knowledge is exact (tic-tac-toe, where it is the eight winning lines) and is the
 \emph{weakest} learned-comparable method when the knowledge is approximate; with
 class weighting \nexs{} is the most accurate model on heart ($0.836$) and the
 best-calibrated on tic-tac-toe (ECE $0.002$), while retaining the most expert
-logic of any learned model. We release code, data, and a fully reproducible
+logic of any learned model. Finally, we isolate \emph{when} expert rules help: in
+a $675$-run factorial study crossing knowledge-base corruption against training
+data, the expert prior is a monotone, positive contribution while the knowledge
+is intact---largest when data is scarce, worth more than additional data when the
+rules are correct---and turns negative once the knowledge is removed; a $20$-seed
+paired analysis with Holm correction shows \nexs{}'s advantage over the MLP and
+semantic loss is statistically significant ($p<0.01$) on the dataset with
+genuinely correct rules, while on the approximate-KB datasets the two are
+statistically indistinguishable. We release code, data, and a fully reproducible
 experiment suite.
 \end{abstract}
 
@@ -518,6 +526,83 @@ better choice. A deployable system should therefore start from the expert rules
 and \emph{learn the corrections}, keeping the rule layer inspectable, which is
 what \nexs{} is designed to do.
 
+\section{When Do Expert Rules Help? A Controlled Study}
+\label{sec:whenhelp}
+The results so far compare methods at a fixed, hand-written knowledge base. The
+central practical question is sharper: \emph{under what conditions do expert rules
+improve a neural learner, and when do they hurt?} We answer it with a factorial
+study that crosses two axes --- the quality of the knowledge and the amount of
+data --- and we add paired significance testing throughout.
+
+\paragraph{Protocol.}
+For each dataset we vary the \emph{knowledge-base corruption} over
+$\{0, 0.25, 0.5, 0.75, 1\}$ (the fraction of expert rules whose thresholds are
+perturbed; $1$ removes the knowledge entirely) and the \emph{training fraction}
+over $\{0.25, 0.5, 1\}$, giving $15$ conditions $\times$ $3$ methods
+(ESS, MLP, \nexs{}) $\times$ $3$ datasets $\times$ $5$ seeds $=675$ runs. The
+significance study retrains the full real-data benchmark with $20$ matched seeds
+($540$ runs) and reports Wilcoxon signed-rank tests with Holm correction and
+$95\%$ paired bootstrap confidence intervals.
+
+\paragraph{Expert rules help when they are \emph{correct}, and the benefit is
+largest when data is scarce.}
+Table~\ref{tab:conditions} reports $\nexs{} - \text{MLP}$ accuracy by condition.
+Averaged over datasets, the expert prior is a consistent positive contribution
+while the knowledge is intact --- $+0.025$ accuracy at corruption $0$, declining
+smoothly to $+0.016$ at corruption $0.75$ --- and turns \emph{negative} once the
+knowledge is destroyed ($-0.089$ at corruption $1$). The degradation is
+monotone in corruption, which is exactly the causal signature we want: the
+benefit tracks the quality of the injected logic, not some incidental
+regularisation. The effect is largest on tic-tac-toe, where the KB is the true
+logic and the benefit reaches $+0.15$ accuracy at $25\%$ of the data.
+
+\paragraph{Noise-free knowledge is worth more than more data.}
+On tic-tac-toe, \nexs{} with a clean KB and only $25\%$ of the data matches the
+MLP trained on $100\%$ of the data, and it never \emph{loses} accuracy when the
+data is cut. The expert prior therefore acts as a data-efficiency prior: it
+supplies the structure the network would otherwise have to infer from samples.
+Conversely, once the KB is empty (corruption $1$) \nexs{} \emph{underperforms}
+the MLP by up to $-0.21$ accuracy, because it is then spending capacity
+modelling a rule layer that carries no signal. This is a caution, not a
+contradiction: injecting rules only pays when the rules are better than what the
+data alone can support.
+
+\paragraph{Significance.}
+Table~\ref{tab:stats} gives the paired comparisons over $20$ seeds. On
+tic-tac-toe every metric difference between \nexs{} and both the MLP and the
+semantic-loss model is significant after Holm correction
+($p<0.01$: accuracy $+0.011$, AUC $+0.006$, logic fidelity $+0.007$, ECE
+$-0.013$), and the confidence intervals exclude zero. On heart, \nexs{} has the
+better point estimate on accuracy, logic fidelity and rule recovery, but the
+intervals include zero and the differences are \emph{not} significant at $20$
+seeds; on pima the two are statistically indistinguishable. We report this
+plainly: the reliable, significant advantage of \nexs{} is on the dataset whose
+knowledge base is genuinely correct, and on heart/pima the honest claim is
+``comparable accuracy with higher logic fidelity'', not superiority.
+
+\paragraph{Functional rule-behaviour probe.}
+To test that the rule layer is not inert, we score a trained tic-tac-toe \nexs{}
+on constructed boards (Table~\ref{tab:behavior}). It assigns probability
+$1.000$ to valid winning lines, $0.747$ to broken lines (two ``x'' and one
+``o''), and $0.476$ to random boards: the model responds to the structure of a
+winning line and its response is graded by how much of the line is intact. This
+is a functional check that the symbolic pathway influences predictions; it is
+\emph{not} proof that the network recovered the original symbolic rule
+structures, which we discuss in Section~\ref{sec:threats}.
+
+\begin{figure}[t]\centering
+  \includegraphics[width=\linewidth]{fig_conditions.png}
+  \caption{When do expert rules help? Top: \nexs{} accuracy against training
+  fraction for each knowledge-base corruption level. Bottom: rule recovery
+  against corruption. The benefit of the expert prior shrinks monotonically as
+  the knowledge is corrupted and reverses when it is removed.}
+  \label{fig:conditions}
+\end{figure}
+
+\input{../figures/table_conditions.tex}
+\input{../figures/table_stats.tex}
+\input{../figures/table_behavior.tex}
+
 \section{Discussion}
 \label{sec:discussion}
 Three findings generalise beyond these benchmarks. First, \emph{where} knowledge
@@ -543,8 +628,13 @@ Our synthetic benchmarks buy ground-truth rules at the cost of ecological
 realism; the regimes and noise levels are plausible but not drawn from a deployed
 system. Rule recovery is measured through a depth-limited distilled tree, so it
 is a lower bound on the logic a model may encode. We evaluate two synthetic
-domains over three seeds and three real datasets over five seeds; the qualitative
-ordering is stable across them, but effect sizes should be read as indicative.
+domains over three seeds and three real datasets over five seeds; the
+significance study uses $20$ seeds. The qualitative ordering is stable across
+them, but effect sizes should be read as indicative. The rule-behaviour probe
+(Section~\ref{sec:whenhelp}) is a functional test of the model's \emph{response}
+to valid and broken rule patterns; it does not establish that the network
+recovered the original symbolic rule structures, only that the symbolic pathway
+measurably shapes predictions.
 
 On the real datasets the expert knowledge bases for heart and pima are written
 from published clinical cut-offs and are \emph{not} the data-generating process,

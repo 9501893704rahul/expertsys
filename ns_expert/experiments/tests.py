@@ -159,6 +159,64 @@ def test_accuracy_optimal_threshold():
           >= accuracy_score(y, (p >= t_f1).astype(int)) - 1e-12)
 
 
+def test_holm_correction():
+    """Holm correction is monotone and never below the raw p-value."""
+    from experiments.advanced_analysis import _holm
+
+    raw = [0.001, 0.02, 0.04, 0.5]
+    adj = _holm(raw)
+    check("Holm adjusted p-values are >= raw and <= 1",
+          all(a >= r - 1e-12 and a <= 1 + 1e-12 for a, r in zip(adj, raw)))
+    check("Holm preserves ordering of raw p-values",
+          adj[0] <= adj[1] <= adj[2] <= adj[3])
+
+
+def test_bootstrap_ci_covers_mean():
+    """The paired bootstrap CI brackets the observed mean difference."""
+    from experiments.advanced_analysis import _paired_ci
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+    a = rng.normal(0.8, 0.05, 30)
+    b = rng.normal(0.7, 0.05, 30)
+    lo, hi = _paired_ci(a, b, n_boot=2000, seed=0)
+    check("paired bootstrap CI brackets the mean difference",
+          lo <= (a - b).mean() <= hi)
+
+
+def test_corruption_monotone_and_empty():
+    """Corruption 0 is a no-op, 1.0 empties the KB, in between perturbs."""
+    from experiments.run_rule_conditions import corrupt_domain
+    from src import real_data
+
+    d0, *_ = real_data.load_real("heart", seed=0)
+    check("corruption 0 leaves the KB unchanged",
+          corrupt_domain(d0, 0.0, 0).expert_rules == d0.expert_rules)
+    check("corruption 1.0 removes all expert rules",
+          len(corrupt_domain(d0, 1.0, 0).expert_rules) == 0)
+    dc = corrupt_domain(d0, 0.5, 0)
+    check("partial corruption keeps the rule count but changes thresholds",
+          len(dc.expert_rules) == len(d0.expert_rules) and dc.expert_rules != d0.expert_rules)
+
+
+def test_paired_statistics_schema():
+    """paired_statistics returns one row per (dataset, metric, baseline)."""
+    import numpy as np
+    import pandas as pd
+    from experiments.advanced_analysis import paired_statistics
+
+    rows = []
+    for seed in range(6):
+        for method, base in (("NEXS(proposed)", 0.80), ("MLP", 0.78)):
+            rows.append(dict(dataset="d", seed=seed, method=method,
+                             acc=base + 0.01 * seed, f1=base + 0.01 * seed))
+    out = paired_statistics(pd.DataFrame(rows))
+    acc_rows = out[out.metric == "acc"]
+    check("paired_statistics reports one NEXS-vs-MLP row per metric",
+          len(acc_rows) == 1 and acc_rows.iloc[0]["method"] == "MLP"
+          and acc_rows.iloc[0]["mean_diff"] > 0 and "p_holm" in out.columns)
+
+
 def main():
     test_expert_system_matches_oracle()
     test_rule_extraction_recovers_expert_rules()
@@ -172,6 +230,10 @@ def main():
     test_ttt_rule_extraction_is_nonzero()
     test_training_knobs_are_available()
     test_accuracy_optimal_threshold()
+    test_holm_correction()
+    test_bootstrap_ci_covers_mean()
+    test_corruption_monotone_and_empty()
+    test_paired_statistics_schema()
     print("\nall tests passed")
 
 
