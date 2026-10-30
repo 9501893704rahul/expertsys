@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+ns_expert/paper/*.aux
+ns_expert/paper/*.log
+ns_expert/paper/*.blg
+ns_expert/paper/*.out
+ns_expert/paper/*.bbl
+.agent_tmp/
