@@ -95,6 +95,41 @@ PYTHONPATH=. python experiments/advanced_analysis.py --results results/real_e1_m
 PYTHONPATH=. python experiments/make_stats_figures.py   # figures + LaTeX tables
 ```
 
+## Independent validation, generalisation, and structural rule recovery
+
+Three follow-up checks strengthen and *qualify* the significance result above:
+
+```bash
+# 1. Independent-sample validation: out-of-fold McNemar (each row tested once)
+PYTHONPATH=. python experiments/paired_validation.py --datasets heart pima ttt \
+    --seeds 0 1 2 3 4 5 6 7 8 9 --folds 5
+
+# 2. Structural rule recovery against ground truth on the full input domain
+PYTHONPATH=. python experiments/structural_recovery.py --datasets ttt monk1 monk3 \
+    --seeds 0 1 2 3 4
+
+# 3. Second rule-governed benchmark (MONK-1 / MONK-3, published formulas)
+PYTHONPATH=. python experiments/run_real_experiments.py --datasets monk1 monk3 \
+    --seeds 0 1 2 3 4 --tag monk
+```
+
+Key results:
+
+* **The 20-seed significance is partly an artifact.** Seeds re-permute the same
+  finite dataset (each row is tested up to 11 times), so they are
+  pseudo-replicates. Under a clean out-of-fold protocol the gap largely
+  disappears (heart p=1.00, pima p=0.15, ttt p=0.25). We therefore claim
+  *parity of accuracy with higher logic fidelity*, not significant superiority.
+* **Structural rule recovery is exact.** NEXS's rule layer equals the
+  ground-truth rule set on tic-tac-toe (8 lines), MONK-1 (4 rules) and MONK-3
+  (7 rules), with precision and recall 1.0. The distilled-tree metric used
+  earlier cannot represent an OR-of-conjunctions and reports F1=0 even for the
+  exact KB; the structural test is the sound measurement.
+* **Generalisation.** On MONK-1 NEXS/semantic-loss/MLP all reach 100%; on the
+  noisy MONK-3 NEXS reaches 0.977 with logic fidelity 0.971, comparable to the
+  best baselines. Rules are recovered, but the fused model obeys them on only
+  63% of the tic-tac-toe domain (the neural head overrides off-support).
+
 Key finding: the expert prior is a **monotone, positive** contribution while the
 knowledge is intact (NEXS$-$MLP accuracy $+0.025$ at corruption $0$, decaying to
 $+0.016$ at $0.75$) and **negative** once it is removed ($-0.089$). On tic-tac-toe

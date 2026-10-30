@@ -74,6 +74,29 @@ TTT_LINES = [
 ]
 
 
+MONK_COLS = ["a1", "a2", "a3", "a4", "a5", "a6"]
+
+
+def load_monk_raw(version: int = 1) -> tuple[pd.DataFrame, np.ndarray]:
+    """MONK's problems: discrete, rule-governed, with *published* ground truth.
+
+    Unlike heart/pima (where the expert KB is approximate) and like tic-tac-toe,
+    the MONK target is an exact logical formula, so this is a second dataset on
+    which structural rule recovery is measurable against a genuine truth.
+    """
+    frames = []
+    for split in ("train", "test"):
+        df = pd.read_csv(DATA / f"monks-{version}.{split}", sep=r"\s+", header=None)
+        frames.append(df)
+    allf = pd.concat(frames, ignore_index=True)
+    # file layout is: class a1 a2 a3 a4 a5 a6 Id
+    y = allf.iloc[:, 0].astype(int).to_numpy()
+    X = allf.iloc[:, 1:7].copy()
+    X.columns = MONK_COLS
+    X = X.astype(float)
+    return X, y
+
+
 def load_ttt_raw() -> tuple[pd.DataFrame, np.ndarray]:
     df = pd.read_csv(DATA / "tictactoe.data", header=None)
     enc = {"x": 1.0, "o": 0.0, "b": 0.5}
@@ -116,6 +139,25 @@ TTT_KB = [("win", [(TTT_CELLS[i], ">=", 0.75, "feature") for i in line], 1.0)
           for line in TTT_LINES]
 TTT_CONCEPTS: tuple[str, ...] = ()
 
+# MONK-1: (a1 = a2) OR (a5 = 1).  Each disjunct is a conjunction of equalities,
+# so the formula is exactly in the fragment the rule layer represents.  Equality
+# is expanded into one rule per shared value: (a1 = a2) <=> OR_v (a1 = v AND a2 = v).
+MONK1_KB = [
+    ("monk", [("a1", "==", v, "feature"), ("a2", "==", v, "feature")], 1.0)
+    for v in (1, 2, 3)
+] + [("monk", [("a5", "==", 1, "feature")], 1.0)]
+MONK1_CONCEPTS: tuple[str, ...] = ()
+
+# MONK-3: (a5 = 3 AND a4 = 1) OR (a5 /= 4 AND a2 /= 3)   [5% class noise in train]
+# Inequalities expand to a disjunction of equalities: a5 /= 4 <=> a5 in {1,2,3},
+# a2 /= 3 <=> a2 in {1,2}.
+MONK3_KB = [("monk", [("a5", "==", 3, "feature"), ("a4", "==", 1, "feature")], 1.0)]
+for _a5 in (1, 2, 3):
+    for _a2 in (1, 2):
+        MONK3_KB.append(("monk", [("a5", "==", _a5, "feature"),
+                                  ("a2", "==", _a2, "feature")], 1.0))
+MONK3_CONCEPTS: tuple[str, ...] = ()
+
 DATASETS = {
     "heart": dict(loader=load_heart_raw, kb=HEART_KB, concepts=HEART_CONCEPTS,
                   binary=("sex", "fbs", "exang"), label="risk", depth=3),
@@ -123,15 +165,29 @@ DATASETS = {
                  binary=(), label="diabetes", depth=3),
     "ttt": dict(loader=load_ttt_raw, kb=TTT_KB, concepts=TTT_CONCEPTS,
                 binary=(), label="win", depth=5),
+    "monk1": dict(loader=lambda: load_monk_raw(1), kb=MONK1_KB,
+                  concepts=MONK1_CONCEPTS, binary=(), label="monk", depth=4),
+    "monk3": dict(loader=lambda: load_monk_raw(3), kb=MONK3_KB,
+                  concepts=MONK3_CONCEPTS, binary=(), label="monk", depth=5),
 }
 
 
 def ground_truth_rules(name: str) -> tuple[Rule, ...] | None:
-    """True logic, only available for tic-tac-toe (the eight winning lines)."""
-    if name != "ttt":
-        return None
-    return tuple(Rule("win", tuple(Literal(TTT_CELLS[i], ">=", 0.75, "feature")
-                                   for i in line)) for line in TTT_LINES)
+    """Published ground-truth logic, where one exists.
+
+    Tic-tac-toe (the eight winning lines) and MONK-1/3 (their published logical
+    formulas) have a genuine ground truth, so rule recovery there measures
+    recovery of the true logic rather than of the expert KB.
+    """
+    if name == "ttt":
+        return tuple(Rule("win", tuple(Literal(TTT_CELLS[i], ">=", 0.75, "feature")
+                                       for i in line)) for line in TTT_LINES)
+    if name in ("monk1", "monk3"):
+        spec = DATASETS[name]
+        return tuple(Rule("monk", tuple(Literal(f, op, t, "feature")
+                                        for f, op, t, _ in body), cf)
+                     for _, body, cf in spec["kb"])
+    return None
 
 
 # --------------------------------------------------------------------------- #

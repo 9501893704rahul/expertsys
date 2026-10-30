@@ -67,12 +67,17 @@ logic of any learned model. Finally, we isolate \emph{when} expert rules help: i
 a $675$-run factorial study crossing knowledge-base corruption against training
 data, the expert prior is a monotone, positive contribution while the knowledge
 is intact---largest when data is scarce, worth more than additional data when the
-rules are correct---and turns negative once the knowledge is removed; a $20$-seed
-paired analysis with Holm correction shows \nexs{}'s advantage over the MLP and
-semantic loss is statistically significant ($p<0.01$) on the dataset with
-genuinely correct rules, while on the approximate-KB datasets the two are
-statistically indistinguishable. We release code, data, and a fully reproducible
-experiment suite.
+rules are correct---and turns negative once the knowledge is removed. We are
+careful about inference: a $20$-seed paired analysis appears to make \nexs{}'s
+advantage over the MLP and semantic loss significant ($p<0.01$) on the dataset
+with genuinely correct rules, but those seeds re-use the same held-out rows and
+are pseudo-replicates; under a clean out-of-fold protocol in which every row is
+predicted exactly once, \nexs{} is at least as accurate as the strongest baseline
+rather than significantly better. On two further rule-governed benchmarks with
+published ground-truth formulas (MONK-1 and MONK-3) the neuro-symbolic model
+matches the best baselines, and on all three logical domains its rule layer is
+\emph{structurally} the true rule set (exact set equality, precision and recall
+$1.0$). We release code, data, and a fully reproducible experiment suite.
 \end{abstract}
 
 \section{Introduction}
@@ -567,7 +572,7 @@ modelling a rule layer that carries no signal. This is a caution, not a
 contradiction: injecting rules only pays when the rules are better than what the
 data alone can support.
 
-\paragraph{Significance.}
+\paragraph{Significance, and a caveat about seeds.}
 Table~\ref{tab:stats} gives the paired comparisons over $20$ seeds. On
 tic-tac-toe every metric difference between \nexs{} and both the MLP and the
 semantic-loss model is significant after Holm correction
@@ -575,10 +580,56 @@ semantic-loss model is significant after Holm correction
 $-0.013$), and the confidence intervals exclude zero. On heart, \nexs{} has the
 better point estimate on accuracy, logic fidelity and rule recovery, but the
 intervals include zero and the differences are \emph{not} significant at $20$
-seeds; on pima the two are statistically indistinguishable. We report this
-plainly: the reliable, significant advantage of \nexs{} is on the dataset whose
-knowledge base is genuinely correct, and on heart/pima the honest claim is
-``comparable accuracy with higher logic fidelity'', not superiority.
+seeds; on pima the two are statistically indistinguishable.
+
+That seed-level test, however, treats seeds as independent samples, and they are
+not. Each seed re-permutes the \emph{same} finite dataset, so over $20$ seeds a
+given row is held out up to $11$ times and the union of test sets covers $99\%$
+of the data: the seeds are pseudo-replicates and the test is anti-conservative.
+We therefore re-run the comparison under a protocol in which every row is
+predicted exactly once (Table~\ref{tab:independent}). Under this clean
+out-of-fold McNemar test the seed-level significance largely \emph{disappears}:
+on heart \nexs{} and the MLP are numerically identical ($p=1.00$), on pima the
+gap is small and non-significant ($p=0.15$), and on tic-tac-toe only $3$ rows
+favour \nexs{} and none favour the MLP ($p=0.25$). We regard the out-of-fold
+numbers as the trustworthy ones. The correct summary is not ``\nexs{} is
+significantly more accurate'' but ``\nexs{} is at least as accurate as the
+strongest baseline, with materially higher logic fidelity'' --- and the large
+apparent effects under seed resampling should be read as an artifact of
+pseudo-replication rather than as evidence.
+
+\paragraph{Generalisation to a second rule-governed benchmark.}
+Tic-tac-toe is one logical domain; to test that the effect is not idiosyncratic
+we add MONK-1 and MONK-3 \cite{thrun1991monk}, whose targets are \emph{published}
+logical formulas, so the expert KB encodes the true concept exactly. On MONK-1
+($(a_1{=}a_2)\lor(a_5{=}1)$) \nexs{}, the semantic-loss model and the MLP all
+reach $100\%$ accuracy with logic fidelity $1.000$, and only the weaker
+non-logical baselines fall behind (decision tree $0.695$, logistic regression
+$0.695$). On the noisy MONK-3, where $5\%$ label noise is added by construction,
+\nexs{} reaches $0.977$ accuracy with logic fidelity $0.971$, statistically
+indistinguishable from the strongest baselines (Table~\ref{tab:monk}). The
+pattern is consistent with the tic-tac-toe result and with the corruption study:
+when the injected rules are correct, the neuro-symbolic model matches the best
+learner and additionally tracks the true logic, whereas on the clinical datasets
+--- whose KBs are expert approximations, not ground truth --- the gain is not
+reliable.
+
+\paragraph{Does it recover the rules?}
+The rule-recovery metric used above distils a depth-limited decision tree from
+the model's decisions. That surrogate cannot represent an
+\emph{OR-of-conjunctions}: on tic-tac-toe and MONK-3 it reports rule-F1 $=0$ even
+for the exact expert KB, because the tree emits longer paths than the true
+three-literal rules. We therefore test structural recovery directly, on the
+complete input domain, against the ground-truth rule set (Table~\ref{tab:structural}).
+The \nexs{} rule layer \emph{is} the true rule set on all three logical domains:
+exact set equality holds for every seed (MONK-1, $4$ rules; MONK-3, $7$ rules;
+tic-tac-toe, $8$ rules), with rule precision and recall of $1.0$. This is a
+genuine structural result, and it also shows why the distilled metric was
+misleading. What the fused model does with those rules is a separate question:
+on MONK the fused decisions agree with the true label on $97$--$98\%$ of the
+full domain, but on tic-tac-toe only $63\%$, because the unconstrained neural
+head overrides the rule layer on the many boards far from the training support.
+The rules are recovered; the model does not always obey them.
 
 \paragraph{Functional rule-behaviour probe.}
 To test that the rule layer is not inert, we score a trained tic-tac-toe \nexs{}
@@ -601,6 +652,9 @@ structures, which we discuss in Section~\ref{sec:threats}.
 
 \input{../figures/table_conditions.tex}
 \input{../figures/table_stats.tex}
+\input{../figures/table_independent.tex}
+\input{../figures/table_monk.tex}
+\input{../figures/table_structural.tex}
 \input{../figures/table_behavior.tex}
 
 \section{Discussion}
@@ -626,15 +680,37 @@ must learn from data yet remain rule-inspectable.
 \label{sec:threats}
 Our synthetic benchmarks buy ground-truth rules at the cost of ecological
 realism; the regimes and noise levels are plausible but not drawn from a deployed
-system. Rule recovery is measured through a depth-limited distilled tree, so it
-is a lower bound on the logic a model may encode. We evaluate two synthetic
-domains over three seeds and three real datasets over five seeds; the
-significance study uses $20$ seeds. The qualitative ordering is stable across
-them, but effect sizes should be read as indicative. The rule-behaviour probe
-(Section~\ref{sec:whenhelp}) is a functional test of the model's \emph{response}
-to valid and broken rule patterns; it does not establish that the network
-recovered the original symbolic rule structures, only that the symbolic pathway
-measurably shapes predictions.
+system. We evaluate two synthetic domains over three seeds and five real/logical
+datasets over five seeds; the significance study uses $20$ seeds. The qualitative
+ordering is stable across them, but effect sizes should be read as indicative.
+
+\paragraph{Seeds are not independent samples.}
+The $20$-seed study re-permutes a single finite dataset, so each row is tested
+several times and the seeds are pseudo-replicates; a paired test over seeds is
+therefore anti-conservative, and we report the out-of-fold McNemar test
+(Table~\ref{tab:independent}) as the primary evidence. Under that clean protocol
+the significant accuracy advantage of \nexs{} over the MLP largely vanishes, and
+we make no significant-superiority claim for accuracy on any dataset. The
+defensible claim is parity of accuracy with higher logic fidelity.
+
+\paragraph{Rule recovery is measured two ways, and the common one is broken.}
+Distilling a depth-limited decision tree cannot represent an OR-of-conjunctions:
+it assigns rule-F1 $=0$ even to the exact expert KB on tic-tac-toe and MONK-3, so
+the distilled ``rule recovery'' column in Tables~\ref{tab:main}
+and~\ref{tab:realmain} should be read as a weak lower bound, not as evidence
+about the model. The direct structural test (Table~\ref{tab:structural}), which
+compares the model's own rule layer with the ground-truth rule set on the full
+input domain, is the sound measurement, and on it \nexs{} recovers the true rules
+exactly. That test is only available where the ground truth is published
+(tic-tac-toe, MONK-1, MONK-3); for heart and pima no such truth exists.
+
+\paragraph{The rules are recovered but not always obeyed.}
+Structural recovery does not imply the fused model follows the rules: on
+tic-tac-toe the fused decisions agree with the true label on only $63\%$ of the
+full domain, because the unconstrained neural head overrides the rule layer off
+the training support. The rule-behaviour probe (Section~\ref{sec:whenhelp}) is a
+functional check of the model's \emph{response} to valid and broken lines, not a
+proof of obedience.
 
 On the real datasets the expert knowledge bases for heart and pima are written
 from published clinical cut-offs and are \emph{not} the data-generating process,

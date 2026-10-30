@@ -217,6 +217,67 @@ def test_paired_statistics_schema():
           and acc_rows.iloc[0]["mean_diff"] > 0 and "p_holm" in out.columns)
 
 
+def test_monk_kb_is_exact():
+    """The MONK expert KB must reproduce the published formula, not approximate it."""
+    from src import real_data
+    from experiments.run_real_experiments import kb_oracle
+    for name, tol in (("monk1", 1.0), ("monk3", 0.90)):
+        accs = []
+        for s in range(3):
+            domain, tr, va, te = real_data.load_real(name, seed=s)
+            accs.append(float((kb_oracle(domain, te.X) == te.y).mean()))
+        m = float(np.mean(accs))
+        # MONK-1 is noise-free (exact); MONK-3 carries 5% class noise by design.
+        check(f"{name} KB oracle accuracy {m:.3f} >= {tol}", m >= tol)
+
+
+def test_full_monk_domain_labels():
+    """The enumerated MONK domain must match the published truth exactly."""
+    from experiments.structural_recovery import full_monk_domain
+    for v, acc_lo in ((1, 1.0), (3, 1.0)):
+        Xd, yd = full_monk_domain(v)
+        # 2*3*3*2*4*2 = 288 distinct attribute tuples
+        check(f"monk{v} full domain has 288 instances", len(yd) == 288)
+        a1, a2, a3, a4, a5 = (Xd[c].to_numpy() for c in
+                              ["a1", "a2", "a3", "a4", "a5"])
+        if v == 1:
+            ref = ((a1 == a2) | (a5 == 1)).astype(int)
+        else:
+            ref = (((a5 == 3) & (a4 == 1)) | ((a5 != 4) & (a2 != 3))).astype(int)
+        check(f"monk{v} enumerated labels == published formula",
+              float((ref == yd).mean()) >= acc_lo)
+
+
+def test_structural_recovery_exact():
+    """NEXS's rule layer must equal the ground-truth rules on a logical domain."""
+    from src import real_data, models
+    name = "monk1"
+    domain, tr, va, te = real_data.load_real(name, seed=0)
+    m = models.NEXS(domain, seed=0, pos_weight="auto", epochs=40, patience=8)
+    m.fit(tr.X.to_numpy(), tr.y, va.X.to_numpy(), va.y)
+    learned = {frozenset(str(l) for l in r.body)
+               for r in m.rules if r.head == domain.label}
+    true = {frozenset(str(l) for l in r.body)
+            for r in domain.expert_rules if r.head == domain.label}
+    check("NEXS rule layer == true MONK-1 rules", learned == true)
+
+
+def test_tree_metric_cannot_represent_or_of_conjunctions():
+    """The distilled metric must fail on an exact KB (documented limitation)."""
+    from src import real_data, rules
+    name = "monk3"
+    domain, tr, va, te = real_data.load_real(name, seed=0)
+    from experiments.run_real_experiments import kb_oracle
+    gt = real_data.ground_truth_rules(name)
+    ref = [frozenset(str(l) for l in r.body) for r in gt]
+    sup = real_data.feature_support(pd.concat([tr.X, va.X, te.X]))
+    pred = rules.extract_rules(lambda Z: kb_oracle(domain, Z), domain,
+                               depth=5, seed=1, support=sup)
+    r = rules.rule_set_match(pred, ref, support=sup)
+    check(f"distilled rule-F1 on the exact MONK-3 KB is ~0 ({r['f1']:.3f})",
+          r["f1"] < 0.2)
+
+
 def main():
     test_expert_system_matches_oracle()
     test_rule_extraction_recovers_expert_rules()
@@ -234,6 +295,10 @@ def main():
     test_bootstrap_ci_covers_mean()
     test_corruption_monotone_and_empty()
     test_paired_statistics_schema()
+    test_monk_kb_is_exact()
+    test_full_monk_domain_labels()
+    test_structural_recovery_exact()
+    test_tree_metric_cannot_represent_or_of_conjunctions()
     print("\nall tests passed")
 
 

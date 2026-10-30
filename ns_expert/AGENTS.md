@@ -47,3 +47,32 @@ Findings (evidence-backed):
 
 Paper: new Section "When Do Expert Rules Help?" (label sec:whenhelp), abstract
 extended, threats clarified. Compiles 24 pages, 0 errors, 0 undefined refs.
+
+## Rigor round 2 (2026-10-30): independence, generalisation, structural recovery
+
+New scripts:
+* `experiments/paired_validation.py` — three protocols for NEXS vs MLP:
+  seed-resampled McNemar (pseudo-replicated), out-of-fold McNemar (each row
+  predicted exactly once; the trustworthy one), and StratifiedGroupKFold folds.
+* `experiments/structural_recovery.py` — enumerates the full input domain
+  (3^9 boards; the 288 MONK tuples) and compares the model's OWN rule layer with
+  the ground-truth rule set, plus oracle/MLP decision agreement on that domain.
+* `src/real_data.py` — added MONK-1/MONK-3 (loader, exact KBs, ground_truth_rules).
+
+Load-bearing findings (these changed the paper's claims):
+* Seeds are pseudo-replicates: over 20 seeds each row is tested up to 11 times
+  and the test-set union covers ~99% of the data. Under a clean out-of-fold
+  McNemar the seed-level significance vanishes (heart p=1.00, pima p=0.15,
+  ttt p=0.25). Claim parity + higher logic fidelity, NOT significant superiority.
+* The distilled-tree rule-F1 is INVALID for OR-of-conjunctions: it returns 0 even
+  for the exact expert KB on ttt and MONK-3. Use structural_recovery.py instead.
+* Structural result: NEXS's rule layer == true rules on all 3 logical domains
+  (exact set equality, P=R=1.0). But fused decisions obey the rules only 63% on
+  the full ttt domain (neural head overrides off-support); MONK is 97-98%.
+* MONK KBs verified against the published formulas: MONK-1 100%, MONK-3 ~98%
+  (the gap is the documented 5% class noise). Note: MONK file column order is
+  class,a1..a6,Id; the input space is 2*3*3*2*4*2=288 tuples, not 432 rows.
+
+Tests added: monk_kb_is_exact, full_monk_domain_labels, structural_recovery_exact,
+tree_metric_cannot_represent_or_of_conjunctions. All pass.
+Paper: 26 pages, 0 errors, 0 undefined refs.
