@@ -61,3 +61,42 @@ cd paper && pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex ma
   model — the rule layer, not the neural head, aligns the model with true logic.
 - The discrete certainty-factor expert system is best calibrated and most robust
   under shift.
+
+## Corrected-protocol findings (supersede the exploratory ones above)
+- Two flaws were found and fixed: (1) **data leakage** — imputation/scaling were
+  fitted on the full dataset before splitting; now fitted on training rows only
+  (`src/pipeline.py`, raw loaders keep NaN). (2) **seed pseudo-replication** —
+  paired tests over seeds re-used the same rows; now use row-level McNemar +
+  bootstrap CIs + Holm on pooled out-of-fold predictions
+  (`experiments/nested_stats.py`).
+- Under the corrected protocol NEXS is **not** uniformly more accurate. On heart
+  and pima it does not beat a plain MLP or random forest and the row-level
+  differences are **not** significant after Holm. Only 3 of 30 prespecified
+  comparisons reach significance, all on datasets with exact rules (ttt, wbc).
+- What survives: (i) a large low-data advantage when knowledge is exact
+  (ttt @10% train rows: NEXS 0.924 vs MLP 0.757); (ii) exact MONK-1 recovery and
+  a logically equivalent ttt rule set (semantic F1 1.000), partial on 5%-noisy
+  MONK-3 (0.395); (iii) NEXS over-fires rule conjunctions less than neural-only
+  on monk1/monk3.
+- Never trust the distilled-tree "rule recovery" column: it cannot represent
+  OR-of-conjunctions and reports F1=0 even for the exact KB. Use
+  `nested_structural.py` (semantic, domain-partition matching) instead.
+- NEXS *injects* its rule layer from the supplied KB, so comparing that layer to
+  ground truth is circular (implementation check only). Genuine discovery uses
+  `src/discovery.py` on labels alone, evaluated out-of-fold.
+
+## Corrected-protocol run commands
+```bash
+cd ns_expert
+PYTHONPATH=. python experiments/nested_cv.py --datasets heart pima wbc ttt monk1 monk3 \
+    --seeds 0 --folds 5 --epochs 150 --patience 20 --out results/nested_cv
+PYTHONPATH=. python experiments/nested_stats.py --datasets heart pima wbc ttt monk1 monk3 --out results/nested_cv
+PYTHONPATH=. python experiments/nested_structural.py --datasets ttt monk1 monk3 --out results/nested_structural
+PYTHONPATH=. python experiments/nested_robustness.py --datasets wbc ttt monk1 monk3 --out results/nested_robustness
+PYTHONPATH=. python experiments/nested_ablation.py --datasets wbc ttt monk1 monk3 --out results/nested_ablation
+PYTHONPATH=. python experiments/make_stats_figures.py
+```
+
+## Push gotcha
+`GITHUB_TOKEN` is read-only for this repo (403 on push) even though the API
+reports admin. Use `GH_PUSH_TOKEN` for `git push`.
