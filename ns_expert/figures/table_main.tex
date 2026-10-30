@@ -6,25 +6,25 @@
 \toprule
 Domain & Method & Acc & F1 & AUC & ECE & RuleF1 & LogicFid \\
 \midrule
-industrial & ESS(discrete) & 0.903 & 0.605 & 0.748 & \textbf{0.086} & 0.333 & \textbf{0.972} \\
+industrial & ESS(discrete) & 0.903 & 0.605 & 0.748 & \textbf{0.086} & \textbf{0.333} & \textbf{0.972} \\
 industrial & ESS(soft) & \textbf{0.916} & 0.623 & 0.757 & 0.071 & n/a & n/a \\
-industrial & LogReg & 0.838 & 0.435 & 0.754 & 0.017 & 0.000 & 0.794 \\
-industrial & DecisionTree & 0.905 & 0.567 & 0.784 & 0.018 & \textbf{0.340} & 0.859 \\
-industrial & RandomForest & 0.915 & \textbf{0.624} & \textbf{0.788} & 0.016 & 0.162 & 0.657 \\
+industrial & LogReg & 0.842 & 0.432 & 0.761 & 0.021 & 0.000 & 0.382 \\
+industrial & DecisionTree & 0.900 & 0.552 & 0.760 & 0.017 & \textbf{0.333} & 0.378 \\
+industrial & RandomForest & \textbf{0.916} & \textbf{0.625} & \textbf{0.787} & 0.016 & 0.067 & 0.404 \\
 industrial & GradientBoosting & 0.911 & 0.581 & 0.778 & 0.024 & 0.278 & 0.819 \\
 industrial & MLP & 0.879 & 0.514 & 0.773 & 0.022 & 0.111 & 0.879 \\
 industrial & SemanticLoss & 0.878 & 0.529 & 0.761 & 0.018 & 0.324 & 0.871 \\
-industrial & NEXS(proposed) & 0.880 & 0.537 & 0.776 & 0.019 & 0.229 & 0.859 \\
+industrial & NEXS(proposed) & 0.883 & 0.537 & 0.764 & 0.022 & 0.229 & 0.873 \\
 \midrule
-medical & ESS(discrete) & 0.883 & 0.748 & 0.866 & \textbf{0.094} & 0.333 & \textbf{0.953} \\
+medical & ESS(discrete) & 0.883 & 0.748 & 0.866 & \textbf{0.094} & \textbf{0.333} & \textbf{0.953} \\
 medical & ESS(soft) & 0.903 & 0.771 & 0.878 & 0.076 & n/a & n/a \\
-medical & LogReg & 0.763 & 0.554 & 0.812 & 0.040 & 0.000 & 0.770 \\
-medical & DecisionTree & 0.901 & 0.741 & 0.893 & 0.029 & \textbf{0.340} & 0.929 \\
-medical & RandomForest & \textbf{0.938} & 0.839 & 0.901 & 0.022 & 0.278 & 0.844 \\
+medical & LogReg & 0.728 & 0.554 & 0.814 & 0.039 & 0.000 & 0.575 \\
+medical & DecisionTree & 0.898 & 0.734 & 0.890 & 0.024 & 0.190 & 0.794 \\
+medical & RandomForest & 0.937 & 0.835 & 0.904 & 0.025 & 0.150 & 0.587 \\
 medical & GradientBoosting & \textbf{0.938} & \textbf{0.842} & \textbf{0.907} & 0.018 & 0.265 & 0.843 \\
 medical & MLP & 0.892 & 0.733 & 0.873 & 0.028 & 0.222 & 0.896 \\
 medical & SemanticLoss & 0.880 & 0.703 & 0.866 & 0.028 & 0.111 & 0.872 \\
-medical & NEXS(proposed) & 0.875 & 0.706 & 0.880 & 0.029 & 0.333 & 0.908 \\
+medical & NEXS(proposed) & 0.878 & 0.708 & 0.879 & 0.029 & \textbf{0.333} & 0.905 \\
 \bottomrule
 \end{tabular}}
 \end{table}

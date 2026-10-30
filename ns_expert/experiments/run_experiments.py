@@ -61,27 +61,42 @@ def _fit_calibrator(p_val, y_val):
     return IsotonicRegression(out_of_bounds="clip").fit(p_val, y_val)
 
 
-def _best_threshold(p_val, y_val):
-    """F1-optimal decision threshold chosen on the validation split."""
+def _best_threshold(p_val, y_val, metric="f1"):
+    """Decision threshold chosen on the validation split.
+
+    ``metric="f1"`` maximises minority-class F1 (the default, used for the F1
+    column); ``metric="acc"`` maximises accuracy. Reporting accuracy at an
+    F1-tuned threshold understates it, so we report both operating points.
+    """
     thrs = np.linspace(0.05, 0.95, 91)
-    best_t, best_f1 = 0.5, -1.0
+    best_t, best_s = 0.5, -1.0
     for t in thrs:
-        f = f1_score(y_val, (p_val >= t).astype(int), zero_division=0)
-        if f > best_f1:
-            best_f1, best_t = f, t
+        yhat = (p_val >= t).astype(int)
+        s = (accuracy_score(y_val, yhat) if metric == "acc"
+             else f1_score(y_val, yhat, zero_division=0))
+        if s > best_s:
+            best_s, best_t = s, t
     return best_t
 
 
 def _evaluate(model, Xva, yva, Xte, yte, calibrate=True):
-    """Calibrate on validation, pick the F1-optimal threshold, score on test."""
+    """Calibrate on validation, then score on test at two operating points.
+
+    The reported ``acc``/``f1`` use the F1-optimal validation threshold; ``acc_opt``
+    additionally reports accuracy at the *accuracy*-optimal threshold, so the
+    accuracy column is not penalised by an F1-tuned operating point.
+    """
     p_va = model.predict_proba(Xva)
     p_te = model.predict_proba(Xte)
     if calibrate:
         iso = _fit_calibrator(p_va, yva)
         p_va, p_te = iso.predict(p_va), iso.predict(p_te)
-    thr = _best_threshold(p_va, yva)
+    thr = _best_threshold(p_va, yva, metric="f1")
     m = _metrics(yte, p_te, thr=thr)
     m["threshold"] = thr
+    thr_acc = _best_threshold(p_va, yva, metric="acc")
+    m["acc_opt"] = float(accuracy_score(yte, (p_te >= thr_acc).astype(int)))
+    m["threshold_acc"] = thr_acc
     return m, p_te
 
 

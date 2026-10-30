@@ -130,6 +130,35 @@ def test_ttt_rule_extraction_is_nonzero():
           r["tp"] >= 1)
 
 
+def test_training_knobs_are_available():
+    """Class weighting, AUC early stopping, and the gated fusion all train."""
+    from src import real_data
+
+    d, tr, va, te = real_data.load_real("heart", seed=0)
+    for kw in (dict(pos_weight="auto"), dict(select="auc"),
+               dict(gated=True), dict(gated=True, pos_weight="auto", select="auc")):
+        m = models.NEXS(d, seed=0, **kw)
+        m.fit(tr.X.to_numpy(), tr.y, va.X.to_numpy(), va.y)
+        p = m.predict_proba(te.X.to_numpy())
+        check(f"NEXS trains with {sorted(kw)} and gives valid probabilities",
+              p.shape == (len(te.y),) and np.all((p >= 0) & (p <= 1)))
+
+
+def test_accuracy_optimal_threshold():
+    """The accuracy-optimal threshold is not worse than the F1-optimal one."""
+    from experiments.run_experiments import _best_threshold
+    from sklearn.metrics import accuracy_score
+
+    rng = np.random.default_rng(0)
+    y = (rng.random(400) < 0.4).astype(int)
+    p = np.clip(y * 0.4 + rng.random(400), 0, 1)
+    t_f1 = _best_threshold(p, y, metric="f1")
+    t_acc = _best_threshold(p, y, metric="acc")
+    check("accuracy-optimal threshold is at least as accurate as F1-optimal",
+          accuracy_score(y, (p >= t_acc).astype(int))
+          >= accuracy_score(y, (p >= t_f1).astype(int)) - 1e-12)
+
+
 def main():
     test_expert_system_matches_oracle()
     test_rule_extraction_recovers_expert_rules()
@@ -141,6 +170,8 @@ def main():
     test_support_aware_literal_match()
     test_literal_parse_handles_digit_names()
     test_ttt_rule_extraction_is_nonzero()
+    test_training_knobs_are_available()
+    test_accuracy_optimal_threshold()
     print("\nall tests passed")
 
 

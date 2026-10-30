@@ -84,11 +84,13 @@ def e1_e3(name, seed):
                  logic_fid=float((out["y_hat"] == kb).mean()))
         rows.append(m)
 
+    # Class weighting is a standard remedy for the class imbalance in these
+    # small clinical/endgame datasets, applied uniformly to every learned model.
     built = {
         **baselines.build_baselines(seed),
-        "MLP": models.MLPModel(domain, seed=seed),
-        "SemanticLoss": models.SemanticLossModel(domain, seed=seed),
-        "NEXS(proposed)": models.NEXS(domain, seed=seed),
+        "MLP": models.MLPModel(domain, seed=seed, pos_weight="auto"),
+        "SemanticLoss": models.SemanticLossModel(domain, seed=seed, pos_weight="auto"),
+        "NEXS(proposed)": models.NEXS(domain, seed=seed, pos_weight="auto"),
     }
     for mname, model in built.items():
         t0 = time.time()

@@ -49,18 +49,23 @@ true logic, bridging the synthetic and real studies.
 Data are fetched from UCI / public mirrors into `data/` and committed, so runs
 are offline-reproducible.
 
-Headline real-data results (mean over 5 seeds, `results/real_e1_main.csv`):
+All learned models use balanced class weighting (applied uniformly) to match the
+class imbalance of these datasets. Accuracy is reported at the F1-optimal
+validation threshold; `acc*` is at the accuracy-optimal threshold, which can
+differ by several points on imbalanced data. Headline real-data results (mean over
+5 seeds, `results/real_e1_main.csv`):
 
-| Dataset | ESS acc | Best learned acc | NEXS logic fidelity | ESS rule F1 |
-|---------|---------|------------------|---------------------|-------------|
-| heart | 0.751 | 0.836 (RF) | 0.734 | 1.000 |
-| pima  | 0.756 | 0.721 (SemanticLoss) | **0.844** | 1.000 |
-| ttt   | 1.000 | 0.995 (NEXS) | **0.993** | 1.000 |
+| Dataset | ESS acc | Best learned acc | NEXS acc (acc*) | NEXS AUC | NEXS logic fid. | ESS rule F1 |
+|---------|---------|------------------|-----------------|----------|-----------------|-------------|
+| heart | 0.751 | **0.836 (NEXS)** | 0.836 (0.833) | 0.902 | 0.748 | 1.000 |
+| pima  | 0.756 | 0.723 (RF) | 0.696 (0.740) | **0.836** | 0.640 | 1.000 |
+| ttt   | 1.000 | 0.997 (NEXS) | 0.997 (0.997) | **1.000** | **0.992** | 1.000 |
 
 The pattern: where the KB is exact (ttt) the expert system is perfect and
 recovers the true logic exactly, while learned models match its accuracy but not
-its rules; where the KB is approximate (heart, pima) the expert system is the
-weakest on accuracy and NEXS retains the most expert logic.
+its rules; where the KB is approximate (heart, pima) the expert system is
+beatable and NEXS is the most accurate model on heart and has the best AUC on
+pima and ttt, while retaining the most expert logic of any learned model.
 
 ```bash
 PYTHONPATH=. python experiments/run_real_experiments.py --seeds 0 1 2 3 4

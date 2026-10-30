@@ -1,40 +1,40 @@
 \begin{table}[t]\centering
-\caption{Real-data results (mean over 5 seeds). Best per dataset-metric in bold.}
+\caption{Real-data results (mean over 5 seeds). Best per dataset-metric in bold. Acc is at the F1-optimal validation threshold; Acc$^\ast$ is at the accuracy-optimal threshold (the expert system has no learnable operating point, so it is n/a).}
 \label{tab:realmain}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{llcccccc}
+\begin{tabular}{llccccccc}
 \toprule
-Dataset & Method & Acc & F1 & AUC & ECE & RuleF1 & LogicFid \\
+Dataset & Method & Acc & Acc$^\ast$ & F1 & AUC & ECE & RuleF1 & LogicFid \\
 \midrule
-heart & ESS(discrete) & 0.751 & 0.769 & 0.801 & 0.222 & \textbf{1.000} & \textbf{1.000} \\
-heart & ESS(soft) & 0.748 & 0.747 & 0.874 & 0.188 & \textbf{1.000} & 0.918 \\
-heart & LogReg & 0.816 & 0.824 & 0.892 & 0.107 & 0.000 & 0.711 \\
-heart & DecisionTree & 0.731 & 0.736 & 0.817 & 0.112 & 0.200 & 0.728 \\
-heart & RandomForest & \textbf{0.836} & 0.834 & \textbf{0.918} & \textbf{0.090} & 0.121 & 0.741 \\
-heart & GradientBoosting & 0.777 & 0.783 & 0.877 & 0.122 & 0.076 & 0.731 \\
-heart & MLP & 0.823 & 0.833 & 0.887 & 0.112 & 0.000 & 0.754 \\
-heart & SemanticLoss & 0.830 & \textbf{0.837} & 0.897 & 0.119 & 0.031 & 0.757 \\
-heart & NEXS(proposed) & 0.816 & 0.827 & 0.891 & 0.123 & 0.088 & 0.734 \\
+heart & ESS(discrete) & 0.751 & n/a & 0.769 & 0.801 & 0.222 & \textbf{1.000} & \textbf{1.000} \\
+heart & ESS(soft) & 0.748 & n/a & 0.747 & 0.874 & 0.188 & \textbf{1.000} & 0.918 \\
+heart & LogReg & 0.816 & 0.816 & 0.824 & 0.890 & 0.102 & 0.000 & 0.708 \\
+heart & DecisionTree & 0.731 & 0.715 & 0.736 & 0.819 & 0.124 & 0.250 & 0.725 \\
+heart & RandomForest & 0.833 & \textbf{0.833} & 0.829 & \textbf{0.914} & \textbf{0.095} & 0.123 & 0.741 \\
+heart & GradientBoosting & 0.777 & 0.777 & 0.783 & 0.877 & 0.122 & 0.076 & 0.731 \\
+heart & MLP & 0.813 & 0.813 & 0.824 & 0.899 & 0.110 & 0.029 & 0.757 \\
+heart & SemanticLoss & 0.816 & \textbf{0.833} & 0.831 & 0.899 & 0.119 & 0.031 & 0.669 \\
+heart & NEXS(proposed) & \textbf{0.836} & \textbf{0.833} & \textbf{0.844} & 0.902 & 0.118 & 0.121 & 0.748 \\
 \midrule
-pima & ESS(discrete) & 0.756 & 0.653 & 0.758 & 0.216 & \textbf{1.000} & \textbf{1.000} \\
-pima & ESS(soft) & \textbf{0.764} & 0.645 & 0.824 & 0.155 & \textbf{1.000} & 0.961 \\
-pima & LogReg & 0.652 & 0.638 & 0.826 & 0.095 & 0.000 & 0.662 \\
-pima & DecisionTree & 0.679 & 0.637 & 0.782 & 0.082 & 0.000 & 0.735 \\
-pima & RandomForest & 0.706 & 0.667 & 0.818 & 0.080 & 0.000 & 0.764 \\
-pima & GradientBoosting & 0.714 & 0.643 & 0.806 & 0.081 & 0.050 & 0.796 \\
-pima & MLP & 0.687 & 0.653 & 0.829 & 0.080 & 0.000 & 0.718 \\
-pima & SemanticLoss & 0.721 & 0.669 & 0.831 & \textbf{0.072} & 0.000 & 0.821 \\
-pima & NEXS(proposed) & 0.719 & \textbf{0.671} & \textbf{0.832} & 0.077 & 0.000 & 0.844 \\
+pima & ESS(discrete) & 0.756 & n/a & 0.653 & 0.758 & 0.216 & \textbf{1.000} & \textbf{1.000} \\
+pima & ESS(soft) & \textbf{0.764} & n/a & 0.645 & 0.824 & 0.155 & \textbf{1.000} & 0.961 \\
+pima & LogReg & 0.661 & \textbf{0.753} & 0.643 & 0.825 & 0.094 & 0.000 & 0.656 \\
+pima & DecisionTree & 0.697 & 0.738 & 0.633 & 0.801 & 0.095 & 0.000 & 0.692 \\
+pima & RandomForest & 0.723 & 0.749 & \textbf{0.677} & 0.812 & 0.085 & 0.000 & 0.690 \\
+pima & GradientBoosting & 0.714 & 0.725 & 0.643 & 0.806 & 0.081 & 0.050 & 0.796 \\
+pima & MLP & 0.705 & \textbf{0.753} & 0.663 & 0.832 & 0.082 & 0.000 & 0.717 \\
+pima & SemanticLoss & 0.718 & 0.740 & 0.676 & 0.824 & \textbf{0.078} & 0.000 & 0.739 \\
+pima & NEXS(proposed) & 0.696 & 0.740 & 0.665 & \textbf{0.836} & 0.084 & 0.000 & 0.640 \\
 \midrule
-ttt & ESS(discrete) & \textbf{1.000} & \textbf{1.000} & \textbf{1.000} & \textbf{0.000} & \textbf{1.000} & \textbf{1.000} \\
-ttt & ESS(soft) & \textbf{1.000} & \textbf{1.000} & \textbf{1.000} & 0.004 & \textbf{1.000} & \textbf{1.000} \\
-ttt & LogReg & 0.958 & 0.969 & 0.979 & 0.033 & 0.000 & 0.664 \\
-ttt & DecisionTree & 0.724 & 0.818 & 0.846 & 0.052 & 0.000 & 0.723 \\
-ttt & RandomForest & 0.943 & 0.956 & 0.977 & 0.040 & 0.000 & 0.735 \\
-ttt & GradientBoosting & 0.982 & 0.987 & 0.998 & 0.018 & 0.000 & 0.860 \\
-ttt & MLP & 0.992 & 0.994 & 0.994 & 0.020 & 0.000 & 0.977 \\
-ttt & SemanticLoss & 0.995 & 0.996 & 0.997 & 0.014 & 0.000 & 0.984 \\
-ttt & NEXS(proposed) & 0.995 & 0.996 & \textbf{1.000} & 0.002 & 0.015 & 0.993 \\
+ttt & ESS(discrete) & \textbf{1.000} & n/a & \textbf{1.000} & \textbf{1.000} & \textbf{0.000} & \textbf{1.000} & \textbf{1.000} \\
+ttt & ESS(soft) & \textbf{1.000} & n/a & \textbf{1.000} & \textbf{1.000} & 0.004 & \textbf{1.000} & \textbf{1.000} \\
+ttt & LogReg & 0.966 & 0.966 & 0.974 & 0.978 & 0.030 & 0.000 & 0.671 \\
+ttt & DecisionTree & 0.725 & 0.740 & 0.819 & 0.838 & 0.042 & 0.000 & 0.730 \\
+ttt & RandomForest & 0.955 & 0.955 & 0.966 & 0.977 & 0.034 & 0.030 & 0.809 \\
+ttt & GradientBoosting & 0.982 & 0.982 & 0.987 & 0.998 & 0.018 & 0.000 & 0.860 \\
+ttt & MLP & 0.993 & 0.993 & 0.994 & 0.997 & 0.019 & 0.000 & 0.989 \\
+ttt & SemanticLoss & 0.992 & 0.992 & 0.994 & 0.993 & 0.018 & 0.000 & 0.975 \\
+ttt & NEXS(proposed) & 0.997 & \textbf{0.997} & 0.998 & \textbf{1.000} & 0.002 & 0.000 & 0.992 \\
 \bottomrule
 \end{tabular}}
 \end{table}

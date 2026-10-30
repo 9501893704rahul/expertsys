@@ -144,13 +144,16 @@ def latex_tables(main, eff, sub, abl, lat):
     agg = main.groupby(["dataset", "method"]).mean(numeric_only=True).reset_index()
     o = _order(agg.method.unique())
     lines = [r"\begin{table}[t]\centering",
-             r"\caption{Real-data results (mean over 5 seeds). Best per dataset-metric in bold.}",
+             r"\caption{Real-data results (mean over 5 seeds). Best per dataset-metric in bold. "
+             r"Acc is at the F1-optimal validation threshold; Acc$^\ast$ is at the accuracy-optimal "
+             r"threshold (the expert system has no learnable operating point, so it is n/a).}",
              r"\label{tab:realmain}", r"\resizebox{\textwidth}{!}{%",
-             r"\begin{tabular}{llcccccc}", r"\toprule",
-             r"Dataset & Method & Acc & F1 & AUC & ECE & RuleF1 & LogicFid \\", r"\midrule"]
+             r"\begin{tabular}{llccccccc}", r"\toprule",
+             r"Dataset & Method & Acc & Acc$^\ast$ & F1 & AUC & ECE & RuleF1 & LogicFid \\",
+             r"\midrule"]
     for d in DS:
         sb = agg[agg.dataset == d].set_index("method")
-        best = {c: sb[c].max() for c in ["acc", "f1", "auc", "rule_f1", "logic_fid"]}
+        best = {c: sb[c].max() for c in ["acc", "acc_opt", "f1", "auc", "rule_f1", "logic_fid"]}
         best["ece"] = sb["ece"].min()
         for m in o:
             if m not in sb.index:
@@ -164,7 +167,7 @@ def latex_tables(main, eff, sub, abl, lat):
                     s = r"\textbf{" + s + "}"
                 return s
 
-            lines.append(f"{d} & {m} & {bf('acc')} & {bf('f1')} & {bf('auc')} & "
+            lines.append(f"{d} & {m} & {bf('acc')} & {bf('acc_opt')} & {bf('f1')} & {bf('auc')} & "
                          f"{bf('ece')} & {bf('rule_f1')} & {bf('logic_fid')} \\\\")
         lines.append(r"\midrule")
     lines[-1] = r"\bottomrule"

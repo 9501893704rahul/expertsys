@@ -29,15 +29,23 @@ class SklearnModel:
 
 
 def build_baselines(seed: int = 0) -> dict[str, SklearnModel]:
+    """Standard tabular baselines.
+
+    ``class_weight="balanced"`` is set wherever the estimator supports it, to
+    match the class weighting used by the neural models on the imbalanced
+    datasets. Gradient boosting has no such option and is left unweighted.
+    """
     return {
-        "LogReg": SklearnModel("LogReg", LogisticRegression(max_iter=2000, C=1.0)),
+        "LogReg": SklearnModel("LogReg", LogisticRegression(max_iter=2000, C=1.0,
+                                                            class_weight="balanced")),
         "DecisionTree": SklearnModel(
-            "DecisionTree", DecisionTreeClassifier(max_depth=4, min_samples_leaf=30, random_state=seed)
+            "DecisionTree", DecisionTreeClassifier(max_depth=4, min_samples_leaf=30,
+                                                   class_weight="balanced", random_state=seed)
         ),
         "RandomForest": SklearnModel(
             "RandomForest",
             RandomForestClassifier(n_estimators=300, max_depth=None, min_samples_leaf=5,
-                                   n_jobs=-1, random_state=seed),
+                                   class_weight="balanced", n_jobs=-1, random_state=seed),
         ),
         "GradientBoosting": SklearnModel(
             "GradientBoosting",
